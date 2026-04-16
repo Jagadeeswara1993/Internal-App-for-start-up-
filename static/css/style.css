@@ -524,6 +524,15 @@ body {
 .badge-late      { background: rgba(245,158,11,0.12); color: #d97706; }
 .badge-processed { background: rgba(14,165,233,0.12); color: #0284c7; }
 
+/* PM lifecycle badges */
+.badge-not-started { background: rgba(107,114,128,0.12); color: #4b5563; }
+.badge-in-progress { background: rgba(14,165,233,0.12); color: #0284c7; }
+.badge-on-hold     { background: rgba(245,158,11,0.12); color: #d97706; }
+
+/* Progress bar inside tables */
+.progress { background: #e2e8f0; border-radius: 20px; overflow: hidden; }
+.progress-bar { transition: width 0.6s ease; }
+
 /* ── Forms ─────────────────────────────────────────────────────────────── */
 .form-card {
   background: var(--card-bg);

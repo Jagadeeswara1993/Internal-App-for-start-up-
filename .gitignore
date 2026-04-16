@@ -1,48 +1,78 @@
-# ── Python ────────────────────────────────────────────────
+# ========================
+# Python
+# ========================
 __pycache__/
 *.py[cod]
-*.pyo
-*.egg-info/
-*.egg
-dist/
-build/
-*.whl
+*$py.class
+*.so
 
-# ── Virtual Environments ─────────────────────────────────
+# ========================
+# Virtual Environments
+# ========================
 venv/
-.venv/
 env/
+.venv/
 .env/
+ENV/
 
-# ── Database (SQLite — regenerate with seed_data.py) ─────
+# ========================
+# Environment Variables / Secrets
+# ========================
+.env
+.env.*
+*.env
+
+# ========================
+# Database Files
+# ========================
 *.db
+*.sqlite
 *.sqlite3
 
-# ── File Uploads (user-generated content) ────────────────
-static/uploads/
+# ========================
+# Flask / Instance
+# ========================
+instance/
+*.log
 
-# ── IDE / Editor ─────────────────────────────────────────
+# ========================
+# IDE / Editor Configs
+# ========================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.sixth/
+
+# ========================
+# OS Generated Files
+# ========================
 .DS_Store
 Thumbs.db
-
-# ── Environment & Secrets ────────────────────────────────
-.env
-.flaskenv
-*.pem
-*.key
-
-# ── Flask Migrations (if using flask-migrate) ────────────
-migrations/
-
-# ── OS files ─────────────────────────────────────────────
-desktop.ini
+Desktop.ini
 ehthumbs.db
 
-# ── AI / Tool generated (not part of source code) ────────
-.sixth/
-.gemini/
+# ========================
+# Distribution / Packaging
+# ========================
+dist/
+build/
+*.egg-info/
+*.egg
+*.whl
+
+# ========================
+# Testing / Coverage
+# ========================
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# ========================
+# Misc
+# ========================
+*.bak
+*.tmp
+*.temp

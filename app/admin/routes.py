@@ -7,6 +7,7 @@ from app.admin import bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (User, Module, UserModule, Employee, Project, Task,
+                        Milestone, Notification,
                         Department, Designation, LeavePolicy, AttendanceRule, AuditLog)
 from app.admin.forms import UserCreateForm, UserEditForm, ModuleAssignForm
 from app.admin.config_forms import (DepartmentForm, DesignationForm,
@@ -41,7 +42,12 @@ def dashboard():
     total_modules = Module.query.count()
     total_employees = Employee.query.count()
     total_projects = Project.query.count()
+    active_projects = Project.query.filter_by(status='In Progress').count()
+    completed_projects = Project.query.filter_by(status='Completed').count()
     total_tasks = Task.query.count()
+    pending_tasks = Task.query.filter_by(status='Pending').count()
+    total_milestones = Milestone.query.count()
+    total_notifications = Notification.query.count()
     total_departments = Department.query.count()
     total_designations = Designation.query.count()
     recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
@@ -51,7 +57,12 @@ def dashboard():
                            total_modules=total_modules,
                            total_employees=total_employees,
                            total_projects=total_projects,
+                           active_projects=active_projects,
+                           completed_projects=completed_projects,
                            total_tasks=total_tasks,
+                           pending_tasks=pending_tasks,
+                           total_milestones=total_milestones,
+                           total_notifications=total_notifications,
                            total_departments=total_departments,
                            total_designations=total_designations,
                            recent_users=recent_users)

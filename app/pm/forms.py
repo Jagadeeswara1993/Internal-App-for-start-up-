@@ -1,4 +1,4 @@
-"""PM forms."""
+"""PM forms — Projects, Tasks, Milestones."""
 
 from flask_wtf import FlaskForm
 from wtforms import (StringField, TextAreaField, DateField, SelectField,
@@ -11,8 +11,9 @@ class ProjectForm(FlaskForm):
     description = TextAreaField('Description', validators=[Optional()])
     start_date = DateField('Start Date', validators=[Optional()])
     end_date = DateField('End Date', validators=[Optional()])
+    deadline = DateField('Deadline', validators=[Optional()])
     status = SelectField('Status', choices=[
-        ('Planning', 'Planning'),
+        ('Not Started', 'Not Started'),
         ('In Progress', 'In Progress'),
         ('On Hold', 'On Hold'),
         ('Completed', 'Completed')
@@ -29,7 +30,19 @@ class TaskForm(FlaskForm):
         ('High', 'High'), ('Critical', 'Critical')
     ])
     status = SelectField('Status', choices=[
-        ('To Do', 'To Do'), ('In Progress', 'In Progress'), ('Done', 'Done')
+        ('Pending', 'Pending'), ('In Progress', 'In Progress'), ('Done', 'Done')
     ])
     due_date = DateField('Due Date', validators=[Optional()])
     submit = SubmitField('Save Task')
+
+
+class MilestoneForm(FlaskForm):
+    title = StringField('Milestone Title', validators=[DataRequired(), Length(2, 200)])
+    description = TextAreaField('Description', validators=[Optional()])
+    deadline = DateField('Deadline', validators=[Optional()])
+    status = SelectField('Status', choices=[
+        ('Pending', 'Pending'),
+        ('In Progress', 'In Progress'),
+        ('Completed', 'Completed')
+    ])
+    submit = SubmitField('Save Milestone')

@@ -9,6 +9,7 @@ from app import create_app
 from app.extensions import db
 from app.models import (User, Module, UserModule, Employee, Leave, LeaveBalance,
                         Attendance, Project, ProjectMember, Task,
+                        Milestone, Notification,
                         Expense, Invoice, SalaryRecord,
                         Department, Designation, LeavePolicy, AttendanceRule)
 
@@ -19,7 +20,7 @@ def seed():
         # Drop & recreate all tables
         db.drop_all()
         db.create_all()
-        print("✓ Tables created.")
+        print("[OK] Tables created.")
 
         # ── Modules ──────────────────────────────────────────────────────
         modules = [
@@ -40,7 +41,7 @@ def seed():
         db.session.add_all(modules)
         db.session.flush()
         mod_map = {m.slug: m for m in modules}
-        print("✓ Modules created.")
+        print("[OK] Modules created.")
 
         # ── Departments (Admin-managed) ──────────────────────────────────
         departments = [
@@ -58,7 +59,7 @@ def seed():
         db.session.add_all(departments)
         db.session.flush()
         dept_map = {d.code: d for d in departments}
-        print("✓ Departments created.")
+        print("[OK] Departments created.")
 
         # ── Designations (Admin-managed) ─────────────────────────────────
         designations = [
@@ -88,7 +89,7 @@ def seed():
         db.session.add_all(designations)
         db.session.flush()
         desig_map = {(d.title, d.department_id): d for d in designations}
-        print("✓ Designations created.")
+        print("[OK] Designations created.")
 
         # ── Leave Policies (Admin-managed) ───────────────────────────────
         leave_policies = [
@@ -102,7 +103,7 @@ def seed():
         ]
         db.session.add_all(leave_policies)
         db.session.flush()
-        print("✓ Leave policies created.")
+        print("[OK] Leave policies created.")
 
         # ── Attendance Rules (Admin-managed) ─────────────────────────────
         att_rule = AttendanceRule(
@@ -111,7 +112,7 @@ def seed():
         )
         db.session.add(att_rule)
         db.session.flush()
-        print("✓ Attendance rules configured.")
+        print("[OK] Attendance rules configured.")
 
         # ── Users ────────────────────────────────────────────────────────
         users_data = [
@@ -171,7 +172,7 @@ def seed():
                 db.session.add(UserModule(user_id=u.id, module_id=mod_map[mod_slug].id))
 
         db.session.flush()
-        print("✓ Users created and modules assigned.")
+        print("[OK] Users created and modules assigned.")
 
         # ── Employee records (now linked to departments & designations) ──
         employees_data = [
@@ -212,7 +213,7 @@ def seed():
             db.session.flush()
             emp_objects[ed['user']] = emp
 
-        print("✓ Employee records created.")
+        print("[OK] Employee records created.")
 
         # ── Leave Balances (initialized from policies) ───────────────────
         for emp_key, emp_obj in emp_objects.items():
@@ -231,7 +232,7 @@ def seed():
                 )
                 db.session.add(balance)
         db.session.flush()
-        print("✓ Leave balances initialized.")
+        print("[OK] Leave balances initialized.")
 
         # ── Leave requests ───────────────────────────────────────────────
         leaves_data = [
@@ -265,7 +266,7 @@ def seed():
             )
             db.session.add(leave)
 
-        print("✓ Leave requests created.")
+        print("[OK] Leave requests created.")
 
         # ── Attendance records ───────────────────────────────────────────
         today = date.today()
@@ -302,18 +303,21 @@ def seed():
                 )
                 db.session.add(att)
 
-        print("✓ Attendance records created.")
+        print("[OK] Attendance records created.")
 
         # ── Projects ─────────────────────────────────────────────────────
         projects_data = [
             {'name': 'Enterprise Portal', 'desc': 'Internal business management platform',
              'start': date(2026, 1, 15), 'end': date(2026, 6, 30),
+             'deadline': date(2026, 7, 15),
              'status': 'In Progress', 'created_by': 'pm_lead'},
             {'name': 'Mobile App v2', 'desc': 'Client-facing mobile application redesign',
              'start': date(2026, 3, 1), 'end': date(2026, 8, 31),
-             'status': 'Planning', 'created_by': 'pm_lead'},
+             'deadline': date(2026, 9, 15),
+             'status': 'Not Started', 'created_by': 'pm_lead'},
             {'name': 'Data Analytics Dashboard', 'desc': 'Business intelligence and reporting tool',
              'start': date(2025, 10, 1), 'end': date(2026, 2, 28),
+             'deadline': date(2026, 2, 28),
              'status': 'Completed', 'created_by': 'admin'},
         ]
 
@@ -324,6 +328,7 @@ def seed():
                 description=pd_entry['desc'],
                 start_date=pd_entry['start'],
                 end_date=pd_entry['end'],
+                deadline=pd_entry.get('deadline'),
                 status=pd_entry['status'],
                 created_by=user_objects[pd_entry['created_by']].id
             )
@@ -331,17 +336,17 @@ def seed():
             db.session.flush()
             project_objects[pd_entry['name']] = proj
 
-        print("✓ Projects created.")
+        print("[OK] Projects created.")
 
         # ── Project Members ──────────────────────────────────────────────
         members_data = [
             {'project': 'Enterprise Portal', 'user': 'pm_lead', 'role': 'Lead'},
-            {'project': 'Enterprise Portal', 'user': 'john_doe', 'role': 'Member'},
-            {'project': 'Enterprise Portal', 'user': 'jane_smith', 'role': 'Observer'},
+            {'project': 'Enterprise Portal', 'user': 'john_doe', 'role': 'Developer'},
+            {'project': 'Enterprise Portal', 'user': 'jane_smith', 'role': 'Tester'},
             {'project': 'Mobile App v2', 'user': 'pm_lead', 'role': 'Lead'},
-            {'project': 'Mobile App v2', 'user': 'john_doe', 'role': 'Member'},
+            {'project': 'Mobile App v2', 'user': 'john_doe', 'role': 'Developer'},
             {'project': 'Data Analytics Dashboard', 'user': 'pm_lead', 'role': 'Lead'},
-            {'project': 'Data Analytics Dashboard', 'user': 'finance_head', 'role': 'Member'},
+            {'project': 'Data Analytics Dashboard', 'user': 'finance_head', 'role': 'Designer'},
         ]
 
         for md in members_data:
@@ -352,7 +357,7 @@ def seed():
             )
             db.session.add(pm)
 
-        print("✓ Project members assigned.")
+        print("[OK] Project members assigned.")
 
         # ── Tasks ────────────────────────────────────────────────────────
         tasks_data = [
@@ -374,11 +379,11 @@ def seed():
              'due': date(2026, 4, 1)},
             {'project': 'Enterprise Portal', 'title': 'Frontend polish',
              'desc': 'Responsive design, animations, dark sidebar',
-             'assigned': 'john_doe', 'priority': 'Medium', 'status': 'To Do',
+             'assigned': 'john_doe', 'priority': 'Medium', 'status': 'Pending',
              'due': date(2026, 4, 30)},
             {'project': 'Mobile App v2', 'title': 'Wireframe design',
              'desc': 'Create UI/UX wireframes',
-             'assigned': 'john_doe', 'priority': 'High', 'status': 'To Do',
+             'assigned': 'john_doe', 'priority': 'High', 'status': 'Pending',
              'due': date(2026, 4, 15)},
         ]
 
@@ -394,7 +399,66 @@ def seed():
             )
             db.session.add(task)
 
-        print("✓ Tasks created.")
+        print("[OK] Tasks created.")
+
+        # ── Milestones ─────────────────────────────────────────────────
+        milestones_data = [
+            {'project': 'Enterprise Portal', 'title': 'Alpha Release',
+             'desc': 'All core modules functional', 'deadline': date(2026, 3, 31),
+             'status': 'Completed'},
+            {'project': 'Enterprise Portal', 'title': 'Beta Release',
+             'desc': 'Bug fixes, UI polish, testing', 'deadline': date(2026, 5, 31),
+             'status': 'In Progress'},
+            {'project': 'Enterprise Portal', 'title': 'Production Launch',
+             'desc': 'Final deployment and go-live', 'deadline': date(2026, 7, 15),
+             'status': 'Pending'},
+            {'project': 'Mobile App v2', 'title': 'Design Approval',
+             'desc': 'Wireframes and mockups signed off', 'deadline': date(2026, 4, 30),
+             'status': 'Pending'},
+            {'project': 'Data Analytics Dashboard', 'title': 'Final Delivery',
+             'desc': 'Dashboard delivered and deployed', 'deadline': date(2026, 2, 28),
+             'status': 'Completed'},
+        ]
+
+        for ms_d in milestones_data:
+            ms = Milestone(
+                project_id=project_objects[ms_d['project']].id,
+                title=ms_d['title'],
+                description=ms_d['desc'],
+                deadline=ms_d['deadline'],
+                status=ms_d['status']
+            )
+            db.session.add(ms)
+
+        print("[OK] Milestones created.")
+
+        # ── Notifications ──────────────────────────────────────────────
+        notifs_data = [
+            {'user': 'john_doe', 'title': 'Task Assigned',
+             'message': 'You have been assigned "Build HR module" in Enterprise Portal.',
+             'category': 'info', 'is_read': True},
+            {'user': 'john_doe', 'title': 'Added to Project',
+             'message': 'You have been added to project "Enterprise Portal" as Developer.',
+             'category': 'info', 'is_read': True},
+            {'user': 'pm_lead', 'title': 'Task Completed',
+             'message': 'Task "Design database schema" has been marked as Done.',
+             'category': 'success', 'is_read': False},
+            {'user': 'pm_lead', 'title': 'Milestone Completed',
+             'message': 'Milestone "Alpha Release" in Enterprise Portal is complete.',
+             'category': 'success', 'is_read': False},
+        ]
+
+        for nd in notifs_data:
+            n = Notification(
+                user_id=user_objects[nd['user']].id,
+                title=nd['title'],
+                message=nd['message'],
+                category=nd['category'],
+                is_read=nd['is_read']
+            )
+            db.session.add(n)
+
+        print("[OK] Notifications created.")
 
         # ── Expenses ─────────────────────────────────────────────────────
         expenses_data = [
@@ -415,7 +479,7 @@ def seed():
             )
             db.session.add(exp)
 
-        print("✓ Expenses created.")
+        print("[OK] Expenses created.")
 
         # ── Invoices ─────────────────────────────────────────────────────
         invoices_data = [
@@ -441,7 +505,7 @@ def seed():
             )
             db.session.add(inv)
 
-        print("✓ Invoices created.")
+        print("[OK] Invoices created.")
 
         # ── Salary Records ──────────────────────────────────────────────
         months = ['January', 'February', 'March']
@@ -459,7 +523,7 @@ def seed():
                 )
                 db.session.add(sal)
 
-        print("✓ Salary records created.")
+        print("[OK] Salary records created.")
 
         # ── Commit all ───────────────────────────────────────────────────
         db.session.commit()

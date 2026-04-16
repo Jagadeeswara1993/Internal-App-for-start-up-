@@ -31,6 +31,10 @@
                 {{ form.end_date(class="form-control", type="date") }}
             </div>
             <div class="col-md-4">
+                {{ form.deadline.label(class="form-label") }}
+                {{ form.deadline(class="form-control", type="date") }}
+            </div>
+            <div class="col-md-4">
                 {{ form.status.label(class="form-label") }}
                 {{ form.status(class="form-select") }}
             </div>

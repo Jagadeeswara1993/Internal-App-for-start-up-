@@ -317,33 +317,52 @@ class Attendance(db.Model):
 
 
 # ===========================================================================
-# PROJECT MANAGEMENT MODELS (unchanged)
+# PROJECT MANAGEMENT MODELS — UPGRADED
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
-# Project
+# Project — UPGRADED with lifecycle, deadline, unique name, progress
 # ---------------------------------------------------------------------------
 class Project(db.Model):
     __tablename__ = 'projects'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
+    name = db.Column(db.String(150), unique=True, nullable=False)   # prevent duplicates
     description = db.Column(db.Text, default='')
     start_date = db.Column(db.Date, default=date.today)
     end_date = db.Column(db.Date, nullable=True)
-    status = db.Column(db.String(30), default='Planning')  # Planning, In Progress, Completed, On Hold
+    deadline = db.Column(db.Date, nullable=True)                     # NEW — hard deadline
+    status = db.Column(db.String(30), default='Not Started')         # Not Started, In Progress, Completed, On Hold
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     members = db.relationship('ProjectMember', backref='project', lazy='dynamic', cascade='all, delete-orphan')
     tasks = db.relationship('Task', backref='project', lazy='dynamic', cascade='all, delete-orphan')
+    milestones = db.relationship('Milestone', backref='project', lazy='dynamic', cascade='all, delete-orphan')
+
+    @property
+    def progress(self):
+        """Calculate project progress (%) based on completed tasks."""
+        total = self.tasks.count()
+        if total == 0:
+            return 0
+        done = self.tasks.filter_by(status='Done').count()
+        return round((done / total) * 100)
+
+    @property
+    def is_delayed(self):
+        """Check if project is past deadline but not completed."""
+        if self.deadline and self.status != 'Completed':
+            return date.today() > self.deadline
+        return False
 
     def __repr__(self):
         return f'<Project {self.name}>'
 
 
 # ---------------------------------------------------------------------------
-# ProjectMember
+# ProjectMember — UPGRADED with expanded project roles
 # ---------------------------------------------------------------------------
 class ProjectMember(db.Model):
     __tablename__ = 'project_members'
@@ -351,7 +370,8 @@ class ProjectMember(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    role = db.Column(db.String(50), default='Member')  # Lead, Member, Observer
+    role = db.Column(db.String(50), default='Developer')  # Developer, Tester, Designer, Lead, Observer
+    joined_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='project_memberships')
     __table_args__ = (db.UniqueConstraint('project_id', 'user_id', name='uq_project_user'),)
@@ -361,7 +381,7 @@ class ProjectMember(db.Model):
 
 
 # ---------------------------------------------------------------------------
-# Task
+# Task — UPGRADED with updated_at tracking
 # ---------------------------------------------------------------------------
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -372,12 +392,60 @@ class Task(db.Model):
     description = db.Column(db.Text, default='')
     assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     priority = db.Column(db.String(20), default='Medium')    # Low, Medium, High, Critical
-    status = db.Column(db.String(20), default='To Do')       # To Do, In Progress, Done
+    status = db.Column(db.String(20), default='Pending')     # Pending, In Progress, Done
     due_date = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f'<Task {self.title}>'
+
+
+# ---------------------------------------------------------------------------
+# Milestone — NEW
+# ---------------------------------------------------------------------------
+class Milestone(db.Model):
+    __tablename__ = 'milestones'
+
+    id = db.Column(db.Integer, primary_key=True)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, default='')
+    deadline = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(30), default='Pending')     # Pending, In Progress, Completed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.UniqueConstraint('project_id', 'title', name='uq_project_milestone'),)
+
+    @property
+    def is_overdue(self):
+        if self.deadline and self.status != 'Completed':
+            return date.today() > self.deadline
+        return False
+
+    def __repr__(self):
+        return f'<Milestone {self.title}>'
+
+
+# ---------------------------------------------------------------------------
+# Notification — NEW (system notifications for PM events)
+# ---------------------------------------------------------------------------
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, default='')
+    category = db.Column(db.String(30), default='info')       # info, success, warning, danger
+    is_read = db.Column(db.Boolean, default=False)
+    link = db.Column(db.String(500), default='')               # optional URL to relevant page
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='notifications')
+
+    def __repr__(self):
+        return f'<Notification {self.title} for user#{self.user_id}>'
 
 
 # ===========================================================================

@@ -3,6 +3,7 @@
 {% block page_title %}Admin Dashboard{% endblock %}
 
 {% block content %}
+<!-- Core Stats -->
 <div class="row g-4 mb-4">
     <div class="col-sm-6 col-xl-4">
         <div class="stat-card purple">
@@ -48,9 +49,10 @@
     </div>
 </div>
 
-<!-- HR Configuration Quick Links -->
+<!-- Quick Links Row -->
 <div class="row g-4 mb-4">
-    <div class="col-lg-6">
+    <!-- User Management -->
+    <div class="col-lg-4">
         <div class="data-card">
             <div class="card-header">
                 <h5><i class="fas fa-shield-halved me-2"></i>User Management</h5>
@@ -64,7 +66,9 @@
             </div>
         </div>
     </div>
-    <div class="col-lg-6">
+
+    <!-- HR Configuration -->
+    <div class="col-lg-4">
         <div class="data-card">
             <div class="card-header">
                 <h5><i class="fas fa-gear me-2"></i>HR Configuration</h5>
@@ -85,6 +89,35 @@
                     <a href="{{ url_for('admin.attendance_rules') }}" class="btn btn-outline-primary text-start">
                         <i class="fas fa-clock me-2"></i>Attendance Rules
                     </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PM Overview — NEW -->
+    <div class="col-lg-4">
+        <div class="data-card">
+            <div class="card-header">
+                <h5><i class="fas fa-diagram-project me-2"></i>PM Overview</h5>
+            </div>
+            <div class="p-4">
+                <div class="d-grid gap-2">
+                    <div class="btn btn-outline-primary text-start" style="cursor:default;">
+                        <i class="fas fa-bolt me-2"></i>Active Projects
+                        <span class="badge bg-success float-end">{{ active_projects }}</span>
+                    </div>
+                    <div class="btn btn-outline-primary text-start" style="cursor:default;">
+                        <i class="fas fa-check-circle me-2"></i>Completed Projects
+                        <span class="badge bg-primary float-end">{{ completed_projects }}</span>
+                    </div>
+                    <div class="btn btn-outline-primary text-start" style="cursor:default;">
+                        <i class="fas fa-clock me-2"></i>Pending Tasks
+                        <span class="badge bg-warning text-dark float-end">{{ pending_tasks }}</span>
+                    </div>
+                    <div class="btn btn-outline-primary text-start" style="cursor:default;">
+                        <i class="fas fa-flag-checkered me-2"></i>Milestones
+                        <span class="badge bg-primary float-end">{{ total_milestones }}</span>
+                    </div>
                     <a href="{{ url_for('admin.audit_logs') }}" class="btn btn-outline-secondary text-start">
                         <i class="fas fa-shield-halved me-2"></i>Audit Logs
                     </a>
