@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Project Management — Enterprise Portal{% endblock %}
+{% block page_title %}Project Management{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <div class="col-sm-6 col-xl-4">
+        <div class="stat-card purple">
+            <div class="stat-icon"><i class="fas fa-folder-open"></i></div>
+            <div class="stat-value">{{ total_projects }}</div>
+            <div class="stat-label">Total Projects</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="stat-card green">
+            <div class="stat-icon"><i class="fas fa-bolt"></i></div>
+            <div class="stat-value">{{ active_projects }}</div>
+            <div class="stat-label">Active Projects</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="stat-card blue">
+            <div class="stat-icon"><i class="fas fa-list-check"></i></div>
+            <div class="stat-value">{{ total_tasks }}</div>
+            <div class="stat-label">Total Tasks</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="stat-card teal">
+            <div class="stat-icon"><i class="fas fa-check-double"></i></div>
+            <div class="stat-value">{{ tasks_done }}</div>
+            <div class="stat-label">Tasks Completed</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="stat-card orange">
+            <div class="stat-icon"><i class="fas fa-spinner"></i></div>
+            <div class="stat-value">{{ tasks_in_progress }}</div>
+            <div class="stat-label">In Progress</div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-4">
+        <div class="stat-card pink">
+            <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="stat-value">{{ overdue_tasks }}</div>
+            <div class="stat-label">Overdue Tasks</div>
+        </div>
+    </div>
+</div>
+
+<div class="data-card">
+    <div class="card-header">
+        <h5><i class="fas fa-clock-rotate-left me-2"></i>Recent Projects</h5>
+        <a href="{{ url_for('pm.projects') }}" class="btn btn-outline-primary btn-sm">View All</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table">
+            <thead><tr><th>Project</th><th>Status</th><th>Created By</th><th>Start</th></tr></thead>
+            <tbody>
+                {% for p in recent_projects %}
+                <tr>
+                    <td><a href="{{ url_for('pm.project_detail', project_id=p.id) }}" class="fw-semibold text-decoration-none">{{ p.name }}</a></td>
+                    <td><span class="badge-status badge-{{ p.status | lower | replace(' ', '-') }}">{{ p.status }}</span></td>
+                    <td>{{ p.creator.full_name }}</td>
+                    <td>{{ p.start_date.strftime('%d %b %Y') if p.start_date else '—' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-center py-4" style="color:var(--text-secondary);">No projects yet</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
