@@ -78,5 +78,6 @@ This is where you make your experience unique. Explain *how* you managed the AI 
 
 ## Summary of Your Persona for Tomorrow
 
+
 You are a **Full-Stack Pragmatist with ML roots**.
 You understand machine learning, but you also know how to build the robust software systems and data pipelines required to *deploy and serve* those models. Your experience as a contract developer proved you can build and ship a massive system quickly by harnessing GenAI, proving you are at the cutting edge of developer productivity.
