@@ -197,6 +197,10 @@ def complete_profile(emp_id):
     form = EmployeeForm(obj=emp)
     form.department_id.choices = [(0, '— Select Department —')] + services.get_departments_for_dropdown()
     form.designation_id.choices = [(0, '— Select Designation —')] + services.get_designations_for_dropdown()
+    form.shift_id.choices = [(0, '— General Shift —')] + services.get_shifts_for_dropdown()
+
+    if request.method == 'GET':
+        form.shift_id.data = emp.shift_id or 0
 
     missing = services.get_missing_fields(emp)
 
