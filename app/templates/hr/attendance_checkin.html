@@ -37,6 +37,22 @@
 
     <!-- Today's Status -->
     <div class="col-lg-7">
+        <!-- Filter Form -->
+        <div class="data-card mb-3 p-3">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-8">
+                    <label class="form-label" style="font-size:0.8rem;">Search Employee</label>
+                    <input type="text" name="search_emp" class="form-control form-control-sm" placeholder="Emp Code or Name" value="{{ search_emp }}">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-search me-1"></i>Search</button>
+                </div>
+                <div class="col-md-2">
+                    <a href="{{ url_for('hr.attendance_checkin') }}" class="btn btn-outline-secondary btn-sm w-100">Clear</a>
+                </div>
+            </form>
+        </div>
+
         <div class="data-card">
             <div class="card-header">
                 <h5><i class="fas fa-calendar-day me-2"></i>Today's Attendance</h5>

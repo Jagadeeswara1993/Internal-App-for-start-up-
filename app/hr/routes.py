@@ -292,10 +292,24 @@ def attendance():
 @module_required('hr')
 def attendance_checkin():
     form = CheckInOutForm()
-    employees = Employee.query.order_by(Employee.emp_code).all()
+    
+    # All employees for the form dropdown
+    all_employees = Employee.query.order_by(Employee.emp_code).all()
     form.employee_id.choices = [(0, '— Select Employee —')] + [
-        (e.id, f'{e.emp_code} — {e.user.full_name}') for e in employees
+        (e.id, f'{e.emp_code} — {e.user.full_name}') for e in all_employees
     ]
+
+    # Filtered employees for the table
+    search_emp = request.args.get('search_emp', '').strip()
+    if search_emp:
+        employees = Employee.query.join(User).filter(
+            db.or_(
+                Employee.emp_code.ilike(f'%{search_emp}%'),
+                User.full_name.ilike(f'%{search_emp}%')
+            )
+        ).order_by(Employee.emp_code).all()
+    else:
+        employees = all_employees
 
     today_records = {a.employee_id: a for a in Attendance.query.filter_by(date=date.today()).all()}
 
@@ -320,7 +334,8 @@ def attendance_checkin():
         return redirect(url_for('hr.attendance_checkin'))
 
     return render_template('hr/attendance_checkin.html', form=form,
-                           today_records=today_records, employees=employees)
+                           today_records=today_records, employees=employees,
+                           search_emp=search_emp)
 
 
 @bp.route('/attendance/report')
