@@ -199,9 +199,6 @@ def complete_profile(emp_id):
     form.designation_id.choices = [(0, '— Select Designation —')] + services.get_designations_for_dropdown()
     form.shift_id.choices = [(0, '— General Shift —')] + services.get_shifts_for_dropdown()
 
-    if request.method == 'GET':
-        form.shift_id.data = emp.shift_id or 0
-
     missing = services.get_missing_fields(emp)
 
     if form.validate_on_submit():
@@ -253,6 +250,39 @@ def api_profile_status(emp_id):
 # ===========================================================================
 # ATTENDANCE MANAGEMENT
 # ===========================================================================
+@bp.route('/api/attendance')
+@module_required('hr')
+def api_attendance():
+    """API for real-time attendance search by employee ID/name."""
+    emp_query = request.args.get('employee_id', '').strip()
+    
+    query = Employee.query.join(User)
+    if emp_query:
+        query = query.filter(
+            db.or_(
+                Employee.emp_code.ilike(f'%{emp_query}%'),
+                User.full_name.ilike(f'%{emp_query}%')
+            )
+        )
+    
+    employees = query.order_by(Employee.emp_code).all()
+    today_records = {a.employee_id: a for a in Attendance.query.filter_by(date=date.today()).all()}
+    
+    results = []
+    for emp in employees:
+        rec = today_records.get(emp.id)
+        results.append({
+            'emp_code': emp.emp_code,
+            'full_name': emp.user.full_name,
+            'check_in': rec.check_in.strftime('%H:%M:%S') if rec and rec.check_in else '—',
+            'check_out': rec.check_out.strftime('%H:%M:%S') if rec and rec.check_out else '—',
+            'working_hours': f'{rec.working_hours:.1f}h' if rec and rec.working_hours else '—',
+            'status': rec.status if rec else 'Not Recorded'
+        })
+        
+    return jsonify(results)
+
+
 @bp.route('/attendance')
 @module_required('hr')
 def attendance():
@@ -292,24 +322,10 @@ def attendance():
 @module_required('hr')
 def attendance_checkin():
     form = CheckInOutForm()
-    
-    # All employees for the form dropdown
-    all_employees = Employee.query.order_by(Employee.emp_code).all()
+    employees = Employee.query.order_by(Employee.emp_code).all()
     form.employee_id.choices = [(0, '— Select Employee —')] + [
-        (e.id, f'{e.emp_code} — {e.user.full_name}') for e in all_employees
+        (e.id, f'{e.emp_code} — {e.user.full_name}') for e in employees
     ]
-
-    # Filtered employees for the table
-    search_emp = request.args.get('search_emp', '').strip()
-    if search_emp:
-        employees = Employee.query.join(User).filter(
-            db.or_(
-                Employee.emp_code.ilike(f'%{search_emp}%'),
-                User.full_name.ilike(f'%{search_emp}%')
-            )
-        ).order_by(Employee.emp_code).all()
-    else:
-        employees = all_employees
 
     today_records = {a.employee_id: a for a in Attendance.query.filter_by(date=date.today()).all()}
 
@@ -334,8 +350,7 @@ def attendance_checkin():
         return redirect(url_for('hr.attendance_checkin'))
 
     return render_template('hr/attendance_checkin.html', form=form,
-                           today_records=today_records, employees=employees,
-                           search_emp=search_emp)
+                           today_records=today_records, employees=employees)
 
 
 @bp.route('/attendance/report')
@@ -961,3 +976,4 @@ def run_auto_absent():
     else:
         flash('No employees to mark absent.', 'info')
     return redirect(url_for('hr.attendance'))
+   

@@ -18,6 +18,8 @@ class ProjectForm(FlaskForm):
         ('On Hold', 'On Hold'),
         ('Completed', 'Completed')
     ])
+    assigned_pm = SelectField('Assign to Project Manager', coerce=int,
+                              validators=[Optional()])
     submit = SubmitField('Save Project')
 
 

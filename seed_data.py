@@ -205,6 +205,16 @@ def seed():
              'full_name': 'Bob Wilson', 'phone': '+91 99999 00007',
              'password': 'bob123', 'is_admin': False,
              'modules': ['hr', 'employee']},
+
+            {'username': 'pm_manager_1', 'email': 'vikram@company.com',
+             'full_name': 'Vikram Patel', 'phone': '+91 99999 00008',
+             'password': 'pm1_123', 'is_admin': False,
+             'modules': ['pm', 'employee']},
+
+            {'username': 'pm_manager_2', 'email': 'neha@company.com',
+             'full_name': 'Neha Kapoor', 'phone': '+91 99999 00009',
+             'password': 'pm2_123', 'is_admin': False,
+             'modules': ['pm', 'employee']},
         ]
 
         user_objects = {}
@@ -252,6 +262,12 @@ def seed():
             {'user': 'bob_wilson', 'code': 'EMP006', 'dept': 'HR',
              'designation': ('HR Associate', dept_map['HR'].id),
              'salary': 55000, 'doj': date(2024, 1, 15), 'pan': 'FGHBW1234F'},
+            {'user': 'pm_manager_1', 'code': 'EMP007', 'dept': 'ENG',
+             'designation': ('Senior Developer', dept_map['ENG'].id),
+             'salary': 88000, 'doj': date(2022, 5, 10), 'pan': 'GHIVP5678G'},
+            {'user': 'pm_manager_2', 'code': 'EMP008', 'dept': 'ENG',
+             'designation': ('Senior Developer', dept_map['ENG'].id),
+             'salary': 86000, 'doj': date(2022, 8, 20), 'pan': 'HIJNK9012H'},
         ]
 
         emp_objects = {}
@@ -373,15 +389,15 @@ def seed():
             {'name': 'Enterprise Portal', 'desc': 'Internal business management platform',
              'start': date(2026, 1, 15), 'end': date(2026, 6, 30),
              'deadline': date(2026, 7, 15),
-             'status': 'In Progress', 'created_by': 'pm_lead'},
+             'status': 'In Progress', 'created_by': 'admin', 'assigned_pm': 'pm_lead'},
             {'name': 'Mobile App v2', 'desc': 'Client-facing mobile application redesign',
              'start': date(2026, 3, 1), 'end': date(2026, 8, 31),
              'deadline': date(2026, 9, 15),
-             'status': 'Not Started', 'created_by': 'pm_lead'},
+             'status': 'Not Started', 'created_by': 'admin', 'assigned_pm': 'pm_manager_1'},
             {'name': 'Data Analytics Dashboard', 'desc': 'Business intelligence and reporting tool',
              'start': date(2025, 10, 1), 'end': date(2026, 2, 28),
              'deadline': date(2026, 2, 28),
-             'status': 'Completed', 'created_by': 'admin'},
+             'status': 'Completed', 'created_by': 'admin', 'assigned_pm': 'pm_manager_2'},
         ]
 
         project_objects = {}
@@ -393,6 +409,7 @@ def seed():
                 end_date=pd_entry['end'],
                 deadline=pd_entry.get('deadline'),
                 status=pd_entry['status'],
+                assigned_pm=user_objects[pd_entry['assigned_pm']].id if pd_entry.get('assigned_pm') else None,
                 created_by=user_objects[pd_entry['created_by']].id
             )
             db.session.add(proj)
@@ -403,12 +420,9 @@ def seed():
 
         # ── Project Members ──────────────────────────────────────────────
         members_data = [
-            {'project': 'Enterprise Portal', 'user': 'pm_lead', 'role': 'Lead'},
-            {'project': 'Enterprise Portal', 'user': 'john_doe', 'role': 'Developer'},
+            {'project': 'Enterprise Portal', 'user': 'john_doe', 'role': 'Team Lead'},
             {'project': 'Enterprise Portal', 'user': 'jane_smith', 'role': 'Tester'},
-            {'project': 'Mobile App v2', 'user': 'pm_lead', 'role': 'Lead'},
             {'project': 'Mobile App v2', 'user': 'john_doe', 'role': 'Developer'},
-            {'project': 'Data Analytics Dashboard', 'user': 'pm_lead', 'role': 'Lead'},
             {'project': 'Data Analytics Dashboard', 'user': 'finance_head', 'role': 'Designer'},
         ]
 

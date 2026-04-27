@@ -38,6 +38,12 @@
                 {{ form.status.label(class="form-label") }}
                 {{ form.status(class="form-select") }}
             </div>
+            {% if current_user.is_admin and form.assigned_pm %}
+            <div class="col-md-4">
+                {{ form.assigned_pm.label(class="form-label") }}
+                {{ form.assigned_pm(class="form-select") }}
+            </div>
+            {% endif %}
         </div>
 
         <hr class="my-4">

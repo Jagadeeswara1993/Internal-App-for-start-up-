@@ -386,10 +386,12 @@ class Project(db.Model):
     end_date = db.Column(db.Date, nullable=True)
     deadline = db.Column(db.Date, nullable=True)                     # NEW — hard deadline
     status = db.Column(db.String(30), default='Not Started')         # Not Started, In Progress, Completed, On Hold
+    assigned_pm = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Project Manager
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    pm_owner = db.relationship('User', foreign_keys=[assigned_pm], backref='managed_projects')
     members = db.relationship('ProjectMember', backref='project', lazy='dynamic', cascade='all, delete-orphan')
     tasks = db.relationship('Task', backref='project', lazy='dynamic', cascade='all, delete-orphan')
     milestones = db.relationship('Milestone', backref='project', lazy='dynamic', cascade='all, delete-orphan')

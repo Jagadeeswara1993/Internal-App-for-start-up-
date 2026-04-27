@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS projects (
     end_date DATE,
     deadline DATE,
     status VARCHAR(30) DEFAULT 'Not Started',
+    assigned_pm INTEGER REFERENCES users(id),
     created_by INTEGER NOT NULL REFERENCES users(id),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
