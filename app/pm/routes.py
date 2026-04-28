@@ -188,6 +188,7 @@ def add_project():
             start_date=form.start_date.data,
             end_date=form.end_date.data,
             deadline=form.deadline.data,
+            estimated_hours=form.estimated_hours.data or 0.0,
             status=form.status.data,
             assigned_pm=assigned,
             created_by=current_user.id
@@ -261,6 +262,7 @@ def edit_project(project_id):
         project.start_date = form.start_date.data
         project.end_date = form.end_date.data
         project.deadline = form.deadline.data
+        project.estimated_hours = form.estimated_hours.data or 0.0
         project.status = form.status.data
         if current_user.is_admin:
             project.assigned_pm = form.assigned_pm.data if form.assigned_pm.data != 0 else None
@@ -383,6 +385,7 @@ def add_task(project_id):
             assigned_to=assigned,
             priority=form.priority.data,
             status=form.status.data,
+            estimated_hours=form.estimated_hours.data or 0.0,
             due_date=form.due_date.data
         )
         db.session.add(task)
@@ -398,6 +401,7 @@ def add_task(project_id):
 
         log_audit(current_user.id, 'CREATE', 'Task', None,
                   f'Created task "{task.title}" in project "{project.name}"')
+        project.check_and_update_status()
         db.session.commit()
         flash(f'Task "{task.title}" created.', 'success')
         return redirect(url_for('pm.project_detail', project_id=project.id))
@@ -431,6 +435,7 @@ def edit_task(task_id):
         task.assigned_to = new_assigned
         task.priority = form.priority.data
         task.status = form.status.data
+        task.estimated_hours = form.estimated_hours.data or 0.0
         task.due_date = form.due_date.data
 
         # Notify: task reassigned to new person
@@ -468,6 +473,7 @@ def edit_task(task_id):
 
         log_audit(current_user.id, 'UPDATE', 'Task', task.id,
                   f'Updated task "{task.title}"')
+        task.project.check_and_update_status()
         db.session.commit()
         flash(f'Task "{task.title}" updated.', 'success')
         return redirect(url_for('pm.project_detail', project_id=task.project_id))
@@ -484,8 +490,47 @@ def delete_task(task_id):
               f'Deleted task "{task.title}"')
     db.session.delete(task)
     db.session.commit()
+    
+    project = Project.query.get(project_id)
+    if project:
+        project.check_and_update_status()
+        db.session.commit()
+        
     flash('Task deleted.', 'info')
     return redirect(url_for('pm.project_detail', project_id=project_id))
+
+
+@bp.route('/tasks/<int:task_id>/log-hours', methods=['POST'])
+@module_required('pm')
+def log_task_hours(task_id):
+    task = Task.query.get_or_404(task_id)
+    if task.assigned_to != current_user.id:
+        abort(403)
+        
+    actual_hours = request.form.get('actual_hours', type=float)
+    if actual_hours is not None and actual_hours >= 0:
+        task.actual_hours = actual_hours
+        
+        # Optionally mark as Done if user checks the box
+        if request.form.get('mark_done') == 'on':
+            old_status = task.status
+            task.status = 'Done'
+            
+            if old_status != 'Done':
+                project = task.project
+                notify(project.created_by,
+                       'Task Completed',
+                       f'Task "{task.title}" in project "{project.name}" has been marked as Done.',
+                       category='success',
+                       link=url_for('pm.project_detail', project_id=project.id))
+        
+        task.project.check_and_update_status()
+        db.session.commit()
+        flash(f'Logged {actual_hours} hours for "{task.title}".', 'success')
+    else:
+        flash('Invalid hours value.', 'danger')
+        
+    return redirect(url_for('pm.project_detail', project_id=task.project_id))
 
 
 # ===========================================================================
