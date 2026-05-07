@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const rawData = {{ projects_data | tojson }};
     
     // Theme configs
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark' || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     Chart.defaults.color = isDark ? '#cbd5e1' : '#475569';
     Chart.defaults.font.family = "'Inter', sans-serif";
     const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
