@@ -140,15 +140,18 @@ def edit_employee(emp_id):
     form.department_id.choices = [(0, '— Select Department —')] + services.get_departments_for_dropdown()
     form.designation_id.choices = [(0, '— Select Designation —')] + services.get_designations_for_dropdown()
     form.shift_id.choices = [(0, '— General Shift —')] + services.get_shifts_for_dropdown()
+    form.reporting_manager_id.choices = [(0, '— No Manager (Direct to HR) —')] + services.get_managers_for_dropdown(exclude_emp_id=emp.id)
 
     if request.method == 'GET':
         form.shift_id.data = emp.shift_id or 0
+        form.reporting_manager_id.data = emp.reporting_manager_id or 0
 
     if form.validate_on_submit():
         # emp_code is system-assigned by Admin and immutable — not updated here
         emp.department_id = form.department_id.data if form.department_id.data != 0 else None
         emp.designation_id = form.designation_id.data if form.designation_id.data != 0 else None
         emp.shift_id = form.shift_id.data if form.shift_id.data != 0 else None
+        emp.reporting_manager_id = form.reporting_manager_id.data if form.reporting_manager_id.data != 0 else None
         emp.date_of_joining = form.date_of_joining.data
         emp.salary = form.salary.data or 0
         emp.bank_account = form.bank_account.data or ''
@@ -217,6 +220,7 @@ def complete_profile(emp_id):
     form.department_id.choices = [(0, '— Select Department —')] + services.get_departments_for_dropdown()
     form.designation_id.choices = [(0, '— Select Designation —')] + services.get_designations_for_dropdown()
     form.shift_id.choices = [(0, '— General Shift —')] + services.get_shifts_for_dropdown()
+    form.reporting_manager_id.choices = [(0, '— No Manager (Direct to HR) —')] + services.get_managers_for_dropdown(exclude_emp_id=emp.id)
 
     missing = services.get_missing_fields(emp)
 
@@ -234,6 +238,9 @@ def complete_profile(emp_id):
         )
         if success:
             # emp_code is system-assigned by Admin — not modified here
+
+            # Set reporting manager if selected
+            emp.reporting_manager_id = form.reporting_manager_id.data if form.reporting_manager_id.data != 0 else None
 
             # Initialize leave balances if not already done
             services.initialize_leave_balances(emp.id)

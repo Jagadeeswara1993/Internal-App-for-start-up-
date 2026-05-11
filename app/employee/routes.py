@@ -56,6 +56,13 @@ def dashboard():
         'pending_hours': 0, 'rejected_count': 0
     }
 
+    # Manager: team pending count for dashboard card
+    team_pending = 0
+    team_size = 0
+    if employee and services.is_manager(employee.id):
+        team_pending = services.get_team_pending_count(employee.id)
+        team_size = len(services.get_direct_reports(employee.id))
+
     return render_template('employee/dashboard.html',
                            employee=employee,
                            profile_complete=profile_complete,
@@ -70,7 +77,9 @@ def dashboard():
                            tasks_done=tasks_done,
                            notifications=notifications,
                            unread_count=unread_count,
-                           ts_summary=ts_summary)
+                           ts_summary=ts_summary,
+                           team_pending=team_pending,
+                           team_size=team_size)
 
 
 # ===========================================================================
@@ -222,12 +231,14 @@ def request_leave():
         if form.end_date.data < form.start_date.data:
             flash('End date cannot be before start date.', 'danger')
             return render_template('employee/leave_request.html',
-                                   form=form, leave_balances=leave_balances)
+                                   form=form, leave_balances=leave_balances,
+                                   reporting_manager=employee.reporting_manager)
 
         success, msg = services.submit_leave_request(
             employee, form.leave_type.data,
             form.start_date.data, form.end_date.data,
             reason=form.reason.data or '',
+            is_urgent=form.is_urgent.data,
             ip=request.remote_addr or ''
         )
         if success:
@@ -238,7 +249,8 @@ def request_leave():
             flash(msg, 'danger')
 
     return render_template('employee/leave_request.html',
-                           form=form, leave_balances=leave_balances)
+                           form=form, leave_balances=leave_balances,
+                           reporting_manager=employee.reporting_manager)
 
 
 # ===========================================================================
@@ -862,3 +874,71 @@ def holiday_calendar():
 
     return render_template('employee/holiday_calendar.html',
                            holidays=holidays, year=year)
+
+
+# ===========================================================================
+# MY TEAM — Manager Leave Approval
+# ===========================================================================
+@bp.route('/team')
+@module_required('employee')
+def my_team():
+    """Manager: View direct reports overview."""
+    employee = get_current_employee_or_abort()
+    if not services.is_manager(employee.id):
+        flash('You do not have any team members assigned to you.', 'info')
+        return redirect(url_for('employee.dashboard'))
+
+    reports = services.get_direct_reports(employee.id)
+    pending_count = services.get_team_pending_count(employee.id)
+    return render_template('employee/my_team.html',
+                           reports=reports, pending_count=pending_count)
+
+
+@bp.route('/team/leaves')
+@module_required('employee')
+def team_leaves():
+    """Manager: View and manage team leave requests."""
+    employee = get_current_employee_or_abort()
+    if not services.is_manager(employee.id):
+        flash('You do not have any team members assigned to you.', 'info')
+        return redirect(url_for('employee.dashboard'))
+
+    status_filter = request.args.get('status', '')
+    leaves = services.get_team_leaves(employee.id, status=status_filter or None)
+    pending_count = services.get_team_pending_count(employee.id)
+    return render_template('employee/team_leaves.html',
+                           leaves=leaves, pending_count=pending_count,
+                           selected_status=status_filter)
+
+
+@bp.route('/team/leaves/<int:leave_id>/approve', methods=['POST'])
+@module_required('employee')
+def team_approve_leave(leave_id):
+    """Manager: Approve a team member's leave."""
+    employee = get_current_employee_or_abort()
+    success, msg = services.manager_approve_leave(
+        leave_id, employee.id, ip=request.remote_addr or ''
+    )
+    if success:
+        db.session.commit()
+        flash(msg, 'success')
+    else:
+        flash(msg, 'danger')
+    return redirect(url_for('employee.team_leaves'))
+
+
+@bp.route('/team/leaves/<int:leave_id>/reject', methods=['POST'])
+@module_required('employee')
+def team_reject_leave(leave_id):
+    """Manager: Reject a team member's leave."""
+    employee = get_current_employee_or_abort()
+    reason = request.form.get('rejection_reason', '').strip()
+    success, msg = services.manager_reject_leave(
+        leave_id, employee.id, reason=reason, ip=request.remote_addr or ''
+    )
+    if success:
+        db.session.commit()
+        flash(msg, 'success')
+    else:
+        flash(msg, 'danger')
+    return redirect(url_for('employee.team_leaves'))

@@ -99,6 +99,17 @@ def get_shifts_for_dropdown():
     return [(s.id, s.shift_name) for s in get_all_shifts()]
 
 
+def get_managers_for_dropdown(exclude_emp_id=None):
+    """Get active employees as (id, name) tuples for reporting manager dropdown.
+    Excludes the employee being edited to prevent self-assignment."""
+    from app.models import User
+    query = Employee.query.join(User).filter(Employee.is_active == True)
+    if exclude_emp_id:
+        query = query.filter(Employee.id != exclude_emp_id)
+    employees = query.order_by(User.full_name).all()
+    return [(e.id, f'{e.emp_code} — {e.user.full_name}') for e in employees]
+
+
 # ===========================================================================
 # ATTENDANCE SERVICES — SHIFT-AWARE
 # ===========================================================================

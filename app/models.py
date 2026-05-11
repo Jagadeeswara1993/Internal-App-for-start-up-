@@ -96,7 +96,7 @@ class User(UserMixin, db.Model):
     def record_failed_login(self):
         """Increment failed login counter and lock if threshold exceeded."""
         self.failed_login_attempts = (self.failed_login_attempts or 0) + 1
-        if self.failed_login_attempts >= 5:
+        if self.failed_login_attempts >= 3:
             # Lock for 15 minutes
             from datetime import timedelta
             self.locked_until = datetime.utcnow() + timedelta(minutes=15)
@@ -289,6 +289,7 @@ class Employee(db.Model):
     department_id = db.Column(db.Integer, db.ForeignKey('departments.id'), nullable=True)
     designation_id = db.Column(db.Integer, db.ForeignKey('designations.id'), nullable=True)
     shift_id = db.Column(db.Integer, db.ForeignKey('shifts.id'), nullable=True)   # NULL = General Shift
+    reporting_manager_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=True)  # NULL = no manager (senior / goes direct to HR)
     date_of_joining = db.Column(db.Date, default=date.today)
     salary = db.Column(db.Float, default=0.0)
     bank_account = db.Column(db.String(30), default='')
@@ -306,6 +307,11 @@ class Employee(db.Model):
     shift_swap_requests = db.relationship('ShiftSwapRequest', backref='employee', lazy='dynamic')
     timesheets = db.relationship('Timesheet', backref='employee', lazy='dynamic')
 
+    # Self-referential: Employee → Reporting Manager
+    reporting_manager = db.relationship('Employee', remote_side='Employee.id',
+                                         backref=db.backref('direct_reports', lazy='dynamic'),
+                                         foreign_keys=[reporting_manager_id])
+
     @property
     def department_name(self):
         return self.department.name if self.department else 'Unassigned'
@@ -317,6 +323,16 @@ class Employee(db.Model):
     @property
     def shift_name(self):
         return self.shift.shift_name if self.shift else 'General'
+
+    @property
+    def manager_name(self):
+        """Full name of the reporting manager, or 'None' if not assigned."""
+        return self.reporting_manager.user.full_name if self.reporting_manager else 'None'
+
+    @property
+    def manager_user_id(self):
+        """User ID of the reporting manager (for notifications)."""
+        return self.reporting_manager.user_id if self.reporting_manager else None
 
     def __repr__(self):
         return f'<Employee {self.emp_code}>'
@@ -343,6 +359,7 @@ class Leave(db.Model):
     manager_approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     hr_status = db.Column(db.String(20), default='Pending')        # Pending, Approved, Rejected
     hr_approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    is_urgent = db.Column(db.Boolean, default=False)               # Urgent leaves skip manager, go direct to HR
     # Cancellation fields
     cancelled_at = db.Column(db.DateTime, nullable=True)
     cancelled_reason = db.Column(db.Text, default='')

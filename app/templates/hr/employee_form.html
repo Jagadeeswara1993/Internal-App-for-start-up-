@@ -47,6 +47,11 @@
                 <small class="text-muted">Leave as "General Shift" for default timing</small>
             </div>
             <div class="col-md-6">
+                {{ form.reporting_manager_id.label(class="form-label") }}
+                {{ form.reporting_manager_id(class="form-select") }}
+                <small class="text-muted">Leave requests go to this manager first. If empty, goes direct to HR.</small>
+            </div>
+            <div class="col-md-6">
                 {{ form.date_of_joining.label(class="form-label") }}
                 {{ form.date_of_joining(class="form-control", type="date") }}
             </div>

@@ -123,7 +123,7 @@ def login():
         if user is None or not user.check_password(form.password.data):
             if user:
                 user.record_failed_login()
-                attempts_left = max(0, 5 - (user.failed_login_attempts or 0))
+                attempts_left = max(0, 3 - (user.failed_login_attempts or 0))
                 _log_login_attempt(user.id, 'Failed', f'Invalid password. {attempts_left} attempts remaining.')
                 db.session.commit()
                 if user.is_locked:

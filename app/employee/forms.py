@@ -3,7 +3,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from wtforms import (StringField, DateField, SelectField, TextAreaField,
-                     FloatField, SubmitField)
+                     FloatField, SubmitField, BooleanField)
 from wtforms.validators import DataRequired, Optional, Length, NumberRange
 
 
@@ -30,6 +30,7 @@ class LeaveRequestForm(FlaskForm):
     start_date = DateField('Start Date', validators=[DataRequired()])
     end_date = DateField('End Date', validators=[DataRequired()])
     reason = TextAreaField('Reason', validators=[Optional(), Length(max=500)])
+    is_urgent = BooleanField('Mark as Urgent (skip manager, direct HR review)')
     submit = SubmitField('Submit Request')
 
 
