@@ -13,9 +13,8 @@ from app.extensions import db
 from app.models import LeavePolicy, Shift, AttendanceRegularization, Holiday
 from app.employee import services
 from app.employee.utils import get_current_employee_or_abort, logger
-from app.employee.forms import (ProfileForm, ProfileUpdateRequestForm,
-                                LeaveRequestForm, ExpenseClaimForm,
-                                TimesheetForm)
+from app.employee.forms import (LeaveRequestForm, ExpenseClaimForm, TimesheetForm,
+                                ProfileUpdateBatchForm)
 
 
 # ===========================================================================
@@ -88,37 +87,27 @@ def dashboard():
 @bp.route('/profile', methods=['GET', 'POST'])
 @module_required('employee')
 def profile():
-    """View and update basic profile info."""
+    """View and update profile info via batch requests."""
     employee = current_user.employee
-    form = ProfileForm(obj=current_user)
+    form = ProfileUpdateBatchForm()
 
     if form.validate_on_submit():
-        current_user.full_name = form.full_name.data
-        current_user.phone = form.phone.data or ''
-        db.session.commit()
-        flash('Profile updated successfully.', 'success')
-        logger.info(f'Profile updated by {current_user.username}')
-        return redirect(url_for('employee.profile'))
-
-    update_requests = []
-    if employee:
-        update_requests = services.get_profile_update_requests(employee.id)
-
-    return render_template('employee/profile.html',
-                           form=form, employee=employee,
-                           update_requests=update_requests)
-
-
-@bp.route('/profile/update-request', methods=['GET', 'POST'])
-@module_required('employee')
-def profile_update_request():
-    """Submit a profile update request for HR approval."""
-    employee = get_current_employee_or_abort()
-    form = ProfileUpdateRequestForm()
-
-    if form.validate_on_submit():
+        if not employee:
+            flash('Employee profile not found.', 'danger')
+            return redirect(url_for('employee.dashboard'))
+            
+        updates_dict = {
+            'full_name': form.full_name.data,
+            'phone': form.phone.data,
+            'date_of_birth': form.date_of_birth.data.strftime('%Y-%m-%d') if form.date_of_birth.data else '',
+            'bank_account': form.bank_account.data,
+            'pan_number': form.pan_number.data,
+            'aadhar_number': form.aadhar_number.data,
+            'location': form.location.data
+        }
+        
         success, msg = services.submit_profile_update_request(
-            employee, form.field_name.data, form.new_value.data,
+            employee, updates_dict,
             ip=request.remote_addr or ''
         )
         if success:
@@ -127,9 +116,24 @@ def profile_update_request():
         else:
             flash(msg, 'danger')
         return redirect(url_for('employee.profile'))
+    
+    # Pre-populate form on GET
+    if request.method == 'GET' and employee:
+        form.full_name.data = current_user.full_name
+        form.phone.data = current_user.phone
+        form.date_of_birth.data = employee.date_of_birth
+        form.bank_account.data = employee.bank_account
+        form.pan_number.data = employee.pan_number
+        form.aadhar_number.data = employee.aadhar_number
+        form.location.data = employee.location
 
-    return render_template('employee/profile_update_request.html',
-                           form=form, employee=employee)
+    update_requests = []
+    if employee:
+        update_requests = services.get_profile_update_requests(employee.id)
+
+    return render_template('employee/profile.html',
+                           form=form, employee=employee,
+                           update_requests=update_requests)
 
 
 # ===========================================================================

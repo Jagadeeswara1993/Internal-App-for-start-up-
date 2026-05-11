@@ -290,10 +290,13 @@ class Employee(db.Model):
     designation_id = db.Column(db.Integer, db.ForeignKey('designations.id'), nullable=True)
     shift_id = db.Column(db.Integer, db.ForeignKey('shifts.id'), nullable=True)   # NULL = General Shift
     reporting_manager_id = db.Column(db.Integer, db.ForeignKey('employees.id'), nullable=True)  # NULL = no manager (senior / goes direct to HR)
+    date_of_birth = db.Column(db.Date, nullable=True)
     date_of_joining = db.Column(db.Date, default=date.today)
     salary = db.Column(db.Float, default=0.0)
     bank_account = db.Column(db.String(30), default='')
     pan_number = db.Column(db.String(15), default='')
+    aadhar_number = db.Column(db.String(20), default='')
+    location = db.Column(db.String(100), default='')
     is_active = db.Column(db.Boolean, default=True)
 
     # relationships

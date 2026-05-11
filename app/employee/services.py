@@ -33,45 +33,60 @@ def get_employee_profile(employee_id):
         return None
 
 
-def submit_profile_update_request(employee, field_name, new_value, ip=''):
-    """Submit a profile update request for HR approval.
+def submit_profile_update_request(employee, updates_dict, ip=''):
+    """Submit a batch profile update request for HR approval.
     Returns (success, message)."""
     try:
-        # Get current value
         field_map = {
+            'full_name': lambda: employee.user.full_name or '',
             'phone': lambda: employee.user.phone or '',
+            'date_of_birth': lambda: employee.date_of_birth.strftime('%Y-%m-%d') if employee.date_of_birth else '',
             'bank_account': lambda: employee.bank_account or '',
             'pan_number': lambda: employee.pan_number or '',
+            'aadhar_number': lambda: employee.aadhar_number or '',
+            'location': lambda: employee.location or '',
         }
 
-        if field_name not in field_map:
-            return False, f'Field "{field_name}" cannot be updated via self-service'
+        changes_made = False
+        batch_time = datetime.utcnow()
 
-        old_value = field_map[field_name]()
+        for field_name, new_value in updates_dict.items():
+            if field_name not in field_map:
+                continue
 
-        if old_value == new_value:
-            return False, 'New value is the same as current value'
+            old_value = field_map[field_name]()
+            
+            # Skip if value hasn't changed or if empty value submitted for optional field
+            if not new_value or str(old_value).strip() == str(new_value).strip():
+                continue
 
-        # Check for existing pending request for same field
-        existing = ProfileUpdateRequest.query.filter_by(
-            employee_id=employee.id, field_name=field_name, status='Pending'
-        ).first()
-        if existing:
-            return False, f'A pending request for {field_name} already exists'
+            # Check for existing pending request for same field and update it
+            existing = ProfileUpdateRequest.query.filter_by(
+                employee_id=employee.id, field_name=field_name, status='Pending'
+            ).first()
+            
+            if existing:
+                existing.new_value = new_value
+                existing.created_at = batch_time
+            else:
+                request_obj = ProfileUpdateRequest(
+                    employee_id=employee.id,
+                    field_name=field_name,
+                    old_value=old_value,
+                    new_value=new_value,
+                    status='Pending',
+                    created_at=batch_time
+                )
+                db.session.add(request_obj)
 
-        request_obj = ProfileUpdateRequest(
-            employee_id=employee.id,
-            field_name=field_name,
-            old_value=old_value,
-            new_value=new_value,
-            status='Pending'
-        )
-        db.session.add(request_obj)
+            changes_made = True
+            log_employee_action('SUBMIT', 'ProfileUpdateRequest', None,
+                              f'Requested {field_name} change to {new_value}', ip)
 
-        log_employee_action('SUBMIT', 'ProfileUpdateRequest', None,
-                          f'Requested {field_name} change', ip)
+        if not changes_made:
+            return False, 'No changes detected. Profile remains the same.'
 
-        # Notify HR users
+        # Notify HR users once for the batch
         from app.models import User, Module
         hr_module = Module.query.filter_by(slug='hr').first()
         if hr_module:
@@ -79,16 +94,16 @@ def submit_profile_update_request(employee, field_name, new_value, ip=''):
                 create_notification(
                     hr_user.id,
                     'Profile Update Request',
-                    f'{employee.user.full_name} requested to update {field_name}',
+                    f'{employee.user.full_name} requested profile updates.',
                     category='info',
                     link='/hr/employees'
                 )
 
-        logger.info(f'Profile update request submitted: emp#{employee.id} field={field_name}')
-        return True, 'Update request submitted for HR approval'
+        logger.info(f'Batch profile update request submitted: emp#{employee.id}')
+        return True, 'Profile update requests submitted for HR approval.'
     except Exception as e:
         logger.error(f'Error submitting profile update: {e}')
-        return False, 'An error occurred while submitting your request'
+        return False, 'An error occurred while submitting your request.'
 
 
 def get_profile_update_requests(employee_id):
@@ -733,6 +748,9 @@ def submit_timesheet(employee, project_id, task_id, ts_date, hours, description,
             ).first()
             if not task:
                 return False, 'Selected task is not assigned to you in this project'
+
+            if ts_date < task.created_at.date():
+                return False, f'Cannot log hours before the task was created ({task.created_at.strftime("%d %b %Y")})'
 
         # Validate date is not in the future
         if ts_date > date.today():

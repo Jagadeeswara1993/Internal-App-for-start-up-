@@ -694,6 +694,12 @@ def is_employee_profile_complete(emp):
         return False
     if not emp.pan_number or emp.pan_number.strip() == '':
         return False
+    if not emp.aadhar_number or emp.aadhar_number.strip() == '':
+        return False
+    if not emp.date_of_birth:
+        return False
+    if not emp.location or emp.location.strip() == '':
+        return False
     if not emp.user.phone or emp.user.phone.strip() == '':
         return False
     return True
@@ -712,6 +718,12 @@ def get_missing_fields(emp):
         missing.append('Bank Account')
     if not emp.pan_number or emp.pan_number.strip() == '':
         missing.append('PAN Number')
+    if not emp.aadhar_number or emp.aadhar_number.strip() == '':
+        missing.append('Aadhar Number')
+    if not emp.date_of_birth:
+        missing.append('Date of Birth')
+    if not emp.location or emp.location.strip() == '':
+        missing.append('Location')
     if not emp.user.phone or emp.user.phone.strip() == '':
         missing.append('Phone')
     return missing
@@ -732,7 +744,7 @@ def get_unassigned_count():
 
 
 def complete_employee_profile(emp, department_id, designation_id, salary,
-                              bank_account, pan_number, phone, country_code='+91', date_of_joining=None):
+                              bank_account, pan_number, aadhar_number, date_of_birth, location, phone, country_code='+91', date_of_joining=None):
     """Update an employee's profile with the missing details.
     Returns (success, message)."""
     if not emp:
@@ -752,12 +764,21 @@ def complete_employee_profile(emp, department_id, designation_id, salary,
         return False, 'PAN number must be exactly 10 alphanumeric characters.'
     if not phone or not phone.isdigit() or len(phone) != 10:
         return False, 'A valid 10-digit mobile number is required.'
+    if not aadhar_number or not re.match(r'^\d{12}$', aadhar_number.strip()):
+        return False, 'Aadhar number must be exactly 12 digits.'
+    if not date_of_birth:
+        return False, 'Date of birth is required.'
+    if not location or location.strip() == '':
+        return False, 'Location is required.'
 
     emp.department_id = int(department_id)
     emp.designation_id = int(designation_id)
     emp.salary = float(salary)
     emp.bank_account = bank_account.strip()
     emp.pan_number = pan_number.strip().upper()
+    emp.aadhar_number = aadhar_number.strip()
+    emp.date_of_birth = date_of_birth
+    emp.location = location.strip()
     emp.user.phone = f"{country_code} {phone}"
     if date_of_joining:
         emp.date_of_joining = date_of_joining
