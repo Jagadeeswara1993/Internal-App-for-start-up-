@@ -3,6 +3,7 @@
 import secrets
 import string
 from flask import render_template, redirect, url_for, flash, request, session
+from flask_login import current_user
 from app.admin import bp
 from app.decorators import admin_required
 from app.extensions import db
@@ -109,7 +110,6 @@ def delete_user(user_id):
         flash('Cannot delete an admin user.', 'danger')
         return redirect(url_for('admin.users'))
     user.is_active_user = False
-    from flask_login import current_user
     log_audit(current_user.id, 'DEACTIVATE', 'User', user.id, f'Deactivated user {user.username}')
     db.session.commit()
     flash(f'User "{user.username}" deactivated.', 'warning')
@@ -177,7 +177,6 @@ def unlock_user(user_id):
     """Manually unlock a locked user account."""
     user = User.query.get_or_404(user_id)
     user.reset_failed_logins()
-    from flask_login import current_user
     log_audit(current_user.id, 'UNLOCK', 'User', user.id,
               f'Manually unlocked {user.username}')
     db.session.commit()

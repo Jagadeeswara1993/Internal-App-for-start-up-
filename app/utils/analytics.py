@@ -1,7 +1,8 @@
 from collections import defaultdict
 from datetime import date as date_cls, timedelta
 from app.extensions import db
-from app.models import Project, Task, Employee, User, Timesheet, Department
+from app.models import (Project, Task, Employee, User, Timesheet, Department,
+                        Attendance, Leave, Shift)
 
 def get_organization_analytics_data():
     """Fetches and aggregates organization-wide analytics data for dashboards."""
@@ -133,3 +134,161 @@ def get_organization_analytics_data():
         'dept_distribution_data': dept_data,
         'daily_trend_data': daily_trend_data
     }
+
+
+def get_hr_analytics_data():
+    """Fetches HR-specific, people-centric analytics data.
+    Covers attendance, leaves, departments, shifts, onboarding, and hours.
+    Does NOT include project/task data (that belongs to PM)."""
+
+    from app.hr import services as hr_services
+
+    today = date_cls.today()
+    current_year = today.year
+    all_employees = Employee.query.filter_by(is_active=True).all()
+    total_employees = len(all_employees)
+
+    # ── 1. Department Headcount ─────────────────────────────────────────
+    departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+    dept_data = {'labels': [], 'values': []}
+    for d in departments:
+        count = d.employees.count()
+        if count > 0:
+            dept_data['labels'].append(d.name)
+            dept_data['values'].append(count)
+
+    # ── 2. Today's Attendance Snapshot ──────────────────────────────────
+    today_records = Attendance.query.filter_by(date=today).all()
+    present_count = sum(1 for r in today_records if r.status in ('Present', 'Late'))
+    late_count = sum(1 for r in today_records if r.status == 'Late')
+    absent_count = total_employees - len(today_records) if total_employees > 0 else 0
+    half_day_count = sum(1 for r in today_records if r.status == 'Half-Day')
+    on_leave_count = sum(1 for r in today_records if r.status == 'On Leave')
+
+    today_attendance = {
+        'labels': ['Present', 'Late', 'Absent', 'Half-Day', 'On Leave'],
+        'values': [present_count - late_count, late_count, absent_count, half_day_count, on_leave_count]
+    }
+
+    # ── 3. Attendance Trend (Last 30 days) ─────────────────────────────
+    thirty_ago = today - timedelta(days=30)
+    recent_attendance = Attendance.query.filter(Attendance.date >= thirty_ago).all()
+    att_day_map = defaultdict(lambda: {'present': 0, 'late': 0, 'absent': 0, 'half_day': 0})
+    for r in recent_attendance:
+        key = r.date.strftime('%d %b')
+        if r.status == 'Present':
+            att_day_map[key]['present'] += 1
+        elif r.status == 'Late':
+            att_day_map[key]['late'] += 1
+        elif r.status == 'Absent':
+            att_day_map[key]['absent'] += 1
+        elif r.status == 'Half-Day':
+            att_day_map[key]['half_day'] += 1
+
+    att_trend_labels = []
+    att_trend_present = []
+    att_trend_late = []
+    att_trend_absent = []
+    for i in range(30, -1, -1):
+        d = today - timedelta(days=i)
+        if d.weekday() >= 5:
+            continue  # Skip weekends
+        lbl = d.strftime('%d %b')
+        att_trend_labels.append(lbl)
+        att_trend_present.append(att_day_map.get(lbl, {}).get('present', 0))
+        att_trend_late.append(att_day_map.get(lbl, {}).get('late', 0))
+        att_trend_absent.append(att_day_map.get(lbl, {}).get('absent', 0))
+
+    attendance_trend = {
+        'labels': att_trend_labels,
+        'present': att_trend_present,
+        'late': att_trend_late,
+        'absent': att_trend_absent
+    }
+
+    # ── 4. Leave Type Distribution (this year, approved) ───────────────
+    approved_leaves = Leave.query.filter(
+        Leave.status == 'Approved',
+        db.extract('year', Leave.start_date) == current_year
+    ).all()
+    leave_type_counts = defaultdict(int)
+    for lv in approved_leaves:
+        leave_type_counts[lv.leave_type] += lv.total_days or 1
+
+    leave_type_data = {
+        'labels': list(leave_type_counts.keys()) or ['No Data'],
+        'values': list(leave_type_counts.values()) or [0]
+    }
+
+    # ── 5. Monthly Leave Trend (this year) ─────────────────────────────
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    monthly_leaves = [0] * 12
+    for lv in approved_leaves:
+        if lv.start_date:
+            monthly_leaves[lv.start_date.month - 1] += lv.total_days or 1
+
+    monthly_leave_data = {
+        'labels': month_names,
+        'values': monthly_leaves
+    }
+
+    # ── 6. Top Employees by Timesheet Hours ────────────────────────────
+    emp_hours = defaultdict(float)
+    approved_ts = Timesheet.query.filter_by(status='Approved').all()
+    for ts in approved_ts:
+        emp_hours[ts.employee_name] += ts.hours_worked
+    sorted_by_hours = sorted(emp_hours.keys(), key=lambda n: emp_hours[n], reverse=True)[:15]
+    employee_hours_data = {
+        'labels': sorted_by_hours,
+        'values': [round(emp_hours[n], 1) for n in sorted_by_hours]
+    }
+
+    # ── 7. Employee Onboarding Status ──────────────────────────────────
+    complete_count = sum(1 for e in all_employees if hr_services.is_employee_profile_complete(e))
+    incomplete_count = total_employees - complete_count
+    onboarding_data = {
+        'labels': ['Profile Complete', 'Incomplete'],
+        'values': [complete_count, incomplete_count]
+    }
+
+    # ── 8. Shift Distribution ──────────────────────────────────────────
+    shifts = Shift.query.filter_by(is_active=True).all()
+    shift_map = {s.id: s.shift_name for s in shifts}
+    shift_counts = defaultdict(int)
+    general_count = 0
+    for emp in all_employees:
+        if emp.shift_id and emp.shift_id in shift_map:
+            shift_counts[shift_map[emp.shift_id]] += 1
+        else:
+            general_count += 1
+    if general_count > 0:
+        shift_counts['General'] = general_count
+    shift_data = {
+        'labels': list(shift_counts.keys()) or ['General'],
+        'values': list(shift_counts.values()) or [total_employees]
+    }
+
+    # ── Pending counts for header ──────────────────────────────────────
+    pending_leaves = Leave.query.filter_by(status='Pending').count()
+    total_hours = round(sum(emp_hours.values()), 1)
+
+    stats = {
+        'total_employees': total_employees,
+        'today_present': present_count,
+        'pending_leaves': pending_leaves,
+        'total_hours': total_hours
+    }
+
+    return {
+        'stats': stats,
+        'dept_data': dept_data,
+        'today_attendance': today_attendance,
+        'attendance_trend': attendance_trend,
+        'leave_type_data': leave_type_data,
+        'monthly_leave_data': monthly_leave_data,
+        'employee_hours_data': employee_hours_data,
+        'onboarding_data': onboarding_data,
+        'shift_data': shift_data
+    }
+

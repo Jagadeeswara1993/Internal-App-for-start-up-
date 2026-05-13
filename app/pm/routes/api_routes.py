@@ -138,28 +138,59 @@ def mark_all_read():
 def timesheet_approvals():
     """PM views pending timesheets for their projects."""
     if current_user.is_admin:
-        project_ids = [p.id for p in Project.query.all()]
+        projects = Project.query.order_by(Project.name).all()
     else:
-        project_ids = [p.id for p in Project.query.filter_by(assigned_pm=current_user.id).all()]
+        projects = Project.query.filter_by(assigned_pm=current_user.id).order_by(Project.name).all()
+        
+    project_ids = [p.id for p in projects]
+
+    selected_project = request.args.get('project', type=int)
+    status_filter = request.args.get('status', 'Pending')
+    page = request.args.get('page', 1, type=int)
 
     if not project_ids:
+        stats = {'total': 0, 'pending': 0, 'approved': 0, 'total_hours': 0}
+        timesheets = Timesheet.query.filter(False).paginate(page=page, per_page=15)
         return render_template('pm/timesheet_approvals.html',
-                               pending_entries=[], approved_entries=[], rejected_entries=[])
+                               timesheets=timesheets, stats=stats,
+                               projects=[], selected_project=None,
+                               selected_status=status_filter)
 
-    status_filter = request.args.get('status', 'Pending')
     query = Timesheet.query.filter(Timesheet.project_id.in_(project_ids))
+    
+    if selected_project:
+        query = query.filter_by(project_id=selected_project)
+
+    # Calculate stats BEFORE status filtering
+    total_entries = query.count()
+    pending_count = query.filter_by(status='Pending').count()
+    approved_count = query.filter_by(status='Approved').count()
+    
+    approved_hours_val = db.session.query(db.func.sum(Timesheet.hours_worked))\
+                                   .filter(Timesheet.project_id.in_(project_ids),
+                                           Timesheet.status=='Approved')
+    if selected_project:
+        approved_hours_val = approved_hours_val.filter(Timesheet.project_id==selected_project)
+    
+    total_hours = approved_hours_val.scalar() or 0
+
+    stats = {
+        'total': total_entries,
+        'pending': pending_count,
+        'approved': approved_count,
+        'total_hours': round(total_hours, 1)
+    }
+
     if status_filter:
         query = query.filter_by(status=status_filter)
-    entries = query.order_by(Timesheet.date.desc()).all()
 
-    pending_entries = [e for e in entries if e.status == 'Pending'] if status_filter in ('', 'Pending') else []
-    approved_entries = [e for e in entries if e.status == 'Approved'] if status_filter in ('', 'Approved') else []
-    rejected_entries = [e for e in entries if e.status == 'Rejected'] if status_filter in ('', 'Rejected') else []
+    timesheets = query.order_by(Timesheet.date.desc()).paginate(page=page, per_page=15, error_out=False)
 
     return render_template('pm/timesheet_approvals.html',
-                           pending_entries=pending_entries,
-                           approved_entries=approved_entries,
-                           rejected_entries=rejected_entries,
+                           timesheets=timesheets,
+                           stats=stats,
+                           projects=projects,
+                           selected_project=selected_project,
                            selected_status=status_filter)
 
 

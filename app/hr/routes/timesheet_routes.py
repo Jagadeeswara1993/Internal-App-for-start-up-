@@ -313,7 +313,7 @@ def reject_all_profile_updates(emp_id):
 @bp.route('/analytics')
 @module_required('hr')
 def analytics():
-    """HR analytics — org-wide project, employee, hours charts."""
-    from app.utils.analytics import get_organization_analytics_data
-    data = get_organization_analytics_data()
-    return render_template('admin/analytics.html', **data)
+    """HR analytics — people-centric workforce insights."""
+    from app.utils.analytics import get_hr_analytics_data
+    data = get_hr_analytics_data()
+    return render_template('hr/analytics.html', **data)

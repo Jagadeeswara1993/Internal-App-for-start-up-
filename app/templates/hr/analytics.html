@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+{% block title %}HR Analytics — Enterprise Portal{% endblock %}
+{% block page_title %}HR Analytics{% endblock %}
+
+{% block extra_css %}
+<style>
+.chart-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    transition: box-shadow 0.3s ease;
+}
+.chart-card:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+.chart-card h6 {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+}
+.chart-card .chart-subtitle {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+.chart-wrapper {
+    position: relative;
+    width: 100%;
+}
+.chart-wrapper.doughnut {
+    max-width: 320px;
+    margin: 0 auto;
+}
+.analytics-header {
+    background: linear-gradient(135deg, #7c3aed, #6366f1);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    color: white;
+}
+.analytics-header h4 {
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+.analytics-header p {
+    opacity: 0.85;
+    font-size: 0.88rem;
+    margin: 0;
+}
+.metric-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 8px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    backdrop-filter: blur(10px);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Analytics Header -->
+<div class="analytics-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div>
+            <h4><i class="fas fa-chart-pie me-2"></i>HR Workforce Analytics</h4>
+            <p>People-centric insights — attendance, leaves, departments & workforce</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="metric-pill"><i class="fas fa-users"></i>{{ stats.total_employees }} Employees</span>
+            <span class="metric-pill"><i class="fas fa-user-check"></i>{{ stats.today_present }} Present Today</span>
+            <span class="metric-pill"><i class="fas fa-clock-rotate-left"></i>{{ stats.pending_leaves }} Pending Leaves</span>
+            <span class="metric-pill"><i class="fas fa-hourglass-half"></i>{{ stats.total_hours }}h Logged</span>
+        </div>
+    </div>
+</div>
+
+<!-- Row 1: Department + Today's Attendance + Onboarding -->
+<div class="row g-4 mb-4">
+    <div class="col-md-4">
+        <div class="chart-card">
+            <h6><i class="fas fa-building me-2" style="color:#6366f1;"></i>Department Headcount</h6>
+            <p class="chart-subtitle">Employees across departments</p>
+            <div class="chart-wrapper doughnut">
+                <canvas id="chartDeptHeadcount"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="chart-card">
+            <h6><i class="fas fa-user-clock me-2" style="color:#22c55e;"></i>Today's Attendance</h6>
+            <p class="chart-subtitle">Live attendance snapshot</p>
+            <div class="chart-wrapper doughnut">
+                <canvas id="chartTodayAttendance"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="chart-card">
+            <h6><i class="fas fa-user-plus me-2" style="color:#f59e0b;"></i>Onboarding Status</h6>
+            <p class="chart-subtitle">Profile completion across workforce</p>
+            <div class="chart-wrapper doughnut">
+                <canvas id="chartOnboarding"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 2: Attendance Trend (30 days) -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-12">
+        <div class="chart-card">
+            <h6><i class="fas fa-chart-area me-2" style="color:#0ea5e9;"></i>Attendance Trend — Last 30 Working Days</h6>
+            <p class="chart-subtitle">Daily present, late & absent counts (weekdays only)</p>
+            <div class="chart-wrapper" style="height: 350px;">
+                <canvas id="chartAttendanceTrend"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 3: Leave Type Distribution + Monthly Leave Trend -->
+<div class="row g-4 mb-4">
+    <div class="col-md-5">
+        <div class="chart-card">
+            <h6><i class="fas fa-calendar-xmark me-2" style="color:#ec4899;"></i>Leave Type Distribution</h6>
+            <p class="chart-subtitle">Approved leaves by type ({{ now().year if now is defined else "this year" }})</p>
+            <div class="chart-wrapper doughnut">
+                <canvas id="chartLeaveType"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="chart-card">
+            <h6><i class="fas fa-chart-column me-2" style="color:#8b5cf6;"></i>Monthly Leave Trend</h6>
+            <p class="chart-subtitle">Leave days consumed per month</p>
+            <div class="chart-wrapper" style="height: 320px;">
+                <canvas id="chartMonthlyLeave"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Row 4: Employee Hours + Shift Distribution -->
+<div class="row g-4 mb-4">
+    <div class="col-lg-7">
+        <div class="chart-card">
+            <h6><i class="fas fa-clock me-2" style="color:#14b8a6;"></i>Top Employees by Hours</h6>
+            <p class="chart-subtitle">Top 15 by approved timesheet hours</p>
+            <div class="chart-wrapper" style="height: 380px;">
+                <canvas id="chartEmpHours"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="chart-card">
+            <h6><i class="fas fa-rotate me-2" style="color:#f97316;"></i>Shift Distribution</h6>
+            <p class="chart-subtitle">Workforce across shifts</p>
+            <div class="chart-wrapper doughnut">
+                <canvas id="chartShiftDist"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#cbd5e1' : '#475569';
+    const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+    const strongTextColor = isDark ? '#f8fafc' : '#1e293b';
+    Chart.defaults.color = textColor;
+    Chart.defaults.font.family = "'Inter', sans-serif";
+
+    const palette = ['#6366f1','#22c55e','#f59e0b','#ef4444','#0ea5e9','#ec4899','#8b5cf6','#14b8a6','#f97316','#64748b','#06b6d4','#a855f7','#10b981','#e11d48','#84cc16'];
+
+    const deptData = {{ dept_data | tojson }};
+    const todayAttData = {{ today_attendance | tojson }};
+    const attTrendData = {{ attendance_trend | tojson }};
+    const leaveTypeData = {{ leave_type_data | tojson }};
+    const monthlyLeaveData = {{ monthly_leave_data | tojson }};
+    const empHoursData = {{ employee_hours_data | tojson }};
+    const onboardingData = {{ onboarding_data | tojson }};
+    const shiftData = {{ shift_data | tojson }};
+
+    // Doughnut legend config with percentages
+    const doughnutLegendConfig = {
+        position: 'bottom',
+        labels: {
+            padding: 16, usePointStyle: true, pointStyleWidth: 14,
+            color: strongTextColor,
+            font: { size: 13, weight: 'bold' },
+            generateLabels: function(chart) {
+                const data = chart.data;
+                if (data.labels.length && data.datasets.length) {
+                    const ds = data.datasets[0];
+                    const total = ds.data.reduce((a, v) => a + v, 0);
+                    return data.labels.map((label, i) => {
+                        const pct = total > 0 ? Math.round((ds.data[i] / total) * 100) + '%' : '0%';
+                        const meta = chart.getDatasetMeta(0);
+                        return {
+                            text: `${label} (${pct})`,
+                            fillStyle: Array.isArray(ds.backgroundColor) ? ds.backgroundColor[i] : ds.backgroundColor,
+                            strokeStyle: 'transparent', lineWidth: 0,
+                            hidden: meta.data[i] && meta.data[i].hidden, index: i
+                        };
+                    });
+                }
+                return [];
+            }
+        }
+    };
+
+    // 1. Department Headcount
+    new Chart(document.getElementById('chartDeptHeadcount'), {
+        type: 'doughnut',
+        data: {
+            labels: deptData.labels,
+            datasets: [{ data: deptData.values, backgroundColor: palette, borderWidth: 0, hoverOffset: 8 }]
+        },
+        options: { responsive: true, cutout: '65%', plugins: { legend: doughnutLegendConfig } }
+    });
+
+    // 2. Today's Attendance
+    new Chart(document.getElementById('chartTodayAttendance'), {
+        type: 'doughnut',
+        data: {
+            labels: todayAttData.labels,
+            datasets: [{ data: todayAttData.values, backgroundColor: ['#22c55e','#f59e0b','#ef4444','#f97316','#6366f1'], borderWidth: 0, hoverOffset: 8 }]
+        },
+        options: { responsive: true, cutout: '65%', plugins: { legend: doughnutLegendConfig } }
+    });
+
+    // 3. Onboarding Status
+    new Chart(document.getElementById('chartOnboarding'), {
+        type: 'doughnut',
+        data: {
+            labels: onboardingData.labels,
+            datasets: [{ data: onboardingData.values, backgroundColor: ['#22c55e','#ef4444'], borderWidth: 0, hoverOffset: 8 }]
+        },
+        options: { responsive: true, cutout: '65%', plugins: { legend: doughnutLegendConfig } }
+    });
+
+    // 4. Attendance Trend (stacked area)
+    new Chart(document.getElementById('chartAttendanceTrend'), {
+        type: 'line',
+        data: {
+            labels: attTrendData.labels,
+            datasets: [
+                {
+                    label: 'Present', data: attTrendData.present, fill: true,
+                    backgroundColor: 'rgba(34,197,94,0.15)', borderColor: '#22c55e',
+                    borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5
+                },
+                {
+                    label: 'Late', data: attTrendData.late, fill: true,
+                    backgroundColor: 'rgba(245,158,11,0.15)', borderColor: '#f59e0b',
+                    borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5
+                },
+                {
+                    label: 'Absent', data: attTrendData.absent, fill: true,
+                    backgroundColor: 'rgba(239,68,68,0.15)', borderColor: '#ef4444',
+                    borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5
+                }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { grid: { display: false }, ticks: { maxTicksLimit: 12 } },
+                y: { grid: { color: gridColor }, beginAtZero: true, ticks: { stepSize: 1 } }
+            },
+            plugins: { legend: { position: 'top', labels: { usePointStyle: true, pointStyleWidth: 10, padding: 16 } } }
+        }
+    });
+
+    // 5. Leave Type Distribution
+    new Chart(document.getElementById('chartLeaveType'), {
+        type: 'doughnut',
+        data: {
+            labels: leaveTypeData.labels,
+            datasets: [{ data: leaveTypeData.values, backgroundColor: ['#6366f1','#22c55e','#f59e0b','#ec4899','#0ea5e9','#8b5cf6'], borderWidth: 0, hoverOffset: 8 }]
+        },
+        options: {
+            responsive: true, cutout: '65%',
+            plugins: {
+                legend: doughnutLegendConfig,
+                tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + ' day(s)' } }
+            }
+        }
+    });
+
+    // 6. Monthly Leave Trend
+    new Chart(document.getElementById('chartMonthlyLeave'), {
+        type: 'bar',
+        data: {
+            labels: monthlyLeaveData.labels,
+            datasets: [{
+                label: 'Leave Days',
+                data: monthlyLeaveData.values,
+                backgroundColor: monthlyLeaveData.values.map((v, i) => {
+                    const d = new Date().getMonth();
+                    return i === d ? '#6366f1' : 'rgba(99,102,241,0.25)';
+                }),
+                borderRadius: 6, maxBarThickness: 35
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+                x: { grid: { display: false } },
+                y: { grid: { color: gridColor }, beginAtZero: true, ticks: { stepSize: 1 } }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' day(s)' } }
+            }
+        }
+    });
+
+    // 7. Employee Hours
+    new Chart(document.getElementById('chartEmpHours'), {
+        type: 'bar',
+        data: {
+            labels: empHoursData.labels,
+            datasets: [{
+                label: 'Approved Hours',
+                data: empHoursData.values,
+                backgroundColor: empHoursData.labels.map((_, i) => palette[i % palette.length]),
+                borderRadius: 6, maxBarThickness: 35
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            indexAxis: 'y',
+            scales: {
+                x: { grid: { color: gridColor }, ticks: { callback: v => v + 'h' } },
+                y: { grid: { display: false } }
+            },
+            plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x + ' hours' } } }
+        }
+    });
+
+    // 8. Shift Distribution
+    new Chart(document.getElementById('chartShiftDist'), {
+        type: 'doughnut',
+        data: {
+            labels: shiftData.labels,
+            datasets: [{ data: shiftData.values, backgroundColor: palette, borderWidth: 0, hoverOffset: 8 }]
+        },
+        options: { responsive: true, cutout: '60%', plugins: { legend: doughnutLegendConfig } }
+    });
+});
+</script>
+{% endblock %}
