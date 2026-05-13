@@ -17,13 +17,7 @@ from app.models import (Employee, Attendance, Leave, LeaveBalance, LeavePolicy,
 # ===========================================================================
 # AUDIT
 # ===========================================================================
-def log_audit(user_id, action, entity_type, entity_id=None, details='', ip=''):
-    """Write an audit log entry."""
-    log = AuditLog(
-        user_id=user_id, action=action, entity_type=entity_type,
-        entity_id=entity_id, details=details, ip_address=ip
-    )
-    db.session.add(log)
+from app.utils.audit import log_audit
 
 
 # ===========================================================================

@@ -1,0 +1,178 @@
+# Split Massive Route Files into Sub-Modules
+
+Split each blueprint's monolithic `routes.py` into logically grouped sub-files within a `routes/` package. All URL endpoints remain unchanged — only file organization changes.
+
+## Strategy
+
+Each module's `routes.py` becomes `routes/__init__.py` (which imports sub-modules). Each sub-file imports `bp` from the parent blueprint and registers its own routes. **Zero URL changes, zero template changes, zero frontend impact.**
+
+---
+
+## Proposed Changes
+
+### Admin Module (1,239 lines → 6 files)
+
+#### [NEW] `app/admin/routes/__init__.py`
+Re-exports `bp` and imports all sub-modules.
+
+#### [NEW] `app/admin/routes/dashboard_routes.py`
+- `dashboard()` — main admin dashboard
+
+#### [NEW] `app/admin/routes/user_routes.py`
+- `users()`, `add_user()`, `edit_user()`, `delete_user()`, `assign_modules()`, `reset_password()`, `unlock_user()`, `login_history()`
+- Shared helpers: `generate_readable_password()`, `log_audit()`
+
+#### [NEW] `app/admin/routes/config_routes.py`
+- Departments: `departments()`, `add_department()`, `edit_department()`, `delete_department()`, `restore_department()`
+- Designations: `designations()`, `add_designation()`, `edit_designation()`, `delete_designation()`, `restore_designation()`
+- Leave policies: `leave_policies()`, `add_leave_policy()`, `edit_leave_policy()`
+- Attendance rules: `attendance_rules()`
+- Shifts: `shifts()`, `add_shift()`, `edit_shift()`
+- Holidays: `holidays()`, `add_holiday()`, `edit_holiday()`, `delete_holiday()`
+- Audit logs: `audit_logs()`
+
+#### [NEW] `app/admin/routes/notification_routes.py`
+- `notifications()`, `send_notification()`, `delete_notification()`
+
+#### [NEW] `app/admin/routes/pm_timesheet_routes.py`
+- PM overview: `pm_overview()`
+- Timesheets: `timesheets()`, `force_approve_timesheet()`, `force_reject_timesheet()`, `export_timesheets()`
+- Analytics: `analytics()`
+
+#### [DELETE] `app/admin/routes.py`
+
+---
+
+### HR Module (1,745 lines → 10 files)
+
+#### [NEW] `app/hr/routes/__init__.py`
+
+#### [NEW] `app/hr/routes/dashboard_routes.py`
+- `dashboard()`
+
+#### [NEW] `app/hr/routes/employee_routes.py`
+- `employees()`, `edit_employee()`, `employee_detail()`, `api_designations()`
+- `unassigned_employees()`, `complete_profile()`, `api_profile_status()`
+
+#### [NEW] `app/hr/routes/attendance_routes.py`
+- `api_attendance()`, `attendance()`, `attendance_checkin()`, `attendance_report()`
+- `export_attendance()`, `export_attendance_report()`
+- `attendance_override()`, `run_auto_absent()`
+- `attendance_regularizations()`, `approve_regularization()`, `reject_regularization()`
+
+#### [NEW] `app/hr/routes/leave_routes.py`
+- `leaves()`, `leave_action()`, `leave_balances()`, `cancel_leave()`
+
+#### [NEW] `app/hr/routes/performance_routes.py`
+- `performance()`, `add_performance()`, `performance_detail()`, `edit_performance()`
+
+#### [NEW] `app/hr/routes/recruitment_routes.py`
+- `recruitment()`, `add_job()`, `job_detail()`, `add_candidate()`, `edit_candidate()`
+- `schedule_interview()`, `interview_feedback()`, `download_resume()`
+
+#### [NEW] `app/hr/routes/payroll_routes.py`
+- `payroll()`, `payroll_generate()`, `payroll_edit()`, `payroll_submit()`
+
+#### [NEW] `app/hr/routes/document_routes.py`
+- `documents()`, `document_upload()`, `document_download()`, `document_delete()`
+
+#### [NEW] `app/hr/routes/timesheet_routes.py`
+- `timesheets()`, `timesheet_attendance_comparison()`, `analytics()`
+- Shift swaps: `shift_swaps()`, `approve_shift_swap()`, `reject_shift_swap()`
+- Comp-offs: `comp_offs()`, `approve_comp_off()`
+- Profile updates: `profile_update_requests()`, `approve_profile_update()`, `reject_profile_update()`, `approve_all_profile_updates()`, `reject_all_profile_updates()`
+
+#### [DELETE] `app/hr/routes.py`
+
+---
+
+### PM Module (968 lines → 7 files)
+
+#### [NEW] `app/pm/routes/__init__.py`
+
+#### [NEW] `app/pm/routes/helpers.py`
+- `_get_user_projects()`, `_is_pm_or_admin()`, `_can_view_project()`, `notify()`, `log_audit()`
+
+#### [NEW] `app/pm/routes/dashboard_routes.py`
+- `dashboard()`, `analytics()`
+
+#### [NEW] `app/pm/routes/project_routes.py`
+- `projects()`, `add_project()`, `project_detail()`, `edit_project()`, `delete_project()`
+
+#### [NEW] `app/pm/routes/team_routes.py`
+- `add_member()`, `remove_member()`
+
+#### [NEW] `app/pm/routes/task_routes.py`
+- `add_task()`, `edit_task()`, `delete_task()`, `log_task_hours()`
+- Milestones: `add_milestone()`, `edit_milestone()`, `delete_milestone()`
+
+#### [NEW] `app/pm/routes/api_routes.py`
+- `api_projects()`, `api_project_detail()`, `api_project_tasks()`, `api_project_milestones()`, `api_project_members()`, `api_notifications()`
+- Notifications: `notifications()`, `mark_notification_read()`, `mark_all_read()`
+- Timesheets: `timesheet_approvals()`, `approve_timesheet()`, `reject_timesheet()`, `bulk_approve_timesheets()`
+
+#### [DELETE] `app/pm/routes.py`
+
+---
+
+### Employee Module (949 lines → 8 files)
+
+#### [NEW] `app/employee/routes/__init__.py`
+
+#### [NEW] `app/employee/routes/dashboard_routes.py`
+- `dashboard()`
+
+#### [NEW] `app/employee/routes/profile_routes.py`
+- `profile()`
+
+#### [NEW] `app/employee/routes/attendance_routes.py`
+- `attendance()`, `attendance_checkin()`, `attendance_checkout()`
+- `attendance_regularization()`, `holiday_calendar()`
+
+#### [NEW] `app/employee/routes/leave_routes.py`
+- `my_leaves()`, `leave_balance()`, `request_leave()`, `cancel_leave()`
+
+#### [NEW] `app/employee/routes/work_routes.py`
+- Payslips: `payslips()`, `payslip_detail()`
+- Expenses: `expenses()`, `submit_expense()`, `expense_detail()`
+- Documents: `documents()`, `document_download()`
+- Performance: `performance()`, `performance_detail()`
+- Projects/Tasks: `projects()`, `my_tasks()`, `update_task_status()`, `log_task_hours()`
+
+#### [NEW] `app/employee/routes/timesheet_routes.py`
+- `my_timesheets()`, `submit_timesheet()`, `api_tasks_for_project()`
+- Shift swap: `shift_swap()`
+- Comp-offs: `my_comp_offs()`
+
+#### [NEW] `app/employee/routes/team_routes.py`
+- `notifications()`, `mark_read()`, `mark_all_read()`
+- Analytics: `analytics()`
+- Team: `my_team()`, `team_leaves()`, `team_approve_leave()`, `team_reject_leave()`
+
+#### [DELETE] `app/employee/routes.py`
+
+---
+
+## Blueprint Init Changes
+
+Each module's `__init__.py` changes from:
+```python
+from app.admin import routes  # noqa
+```
+to:
+```python
+from app.admin import routes  # noqa  (routes is now a package)
+```
+No actual change needed — Python resolves `routes` to `routes/__init__.py` automatically.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+1. Run `python -c "from app import create_app; app = create_app(); print(sorted([r.rule for r in app.url_map.iter_rules()]))"` — verify all routes are registered
+2. Start the Flask dev server and confirm no import errors
+3. Compare route count before vs. after — must be identical
+
+### Manual Verification
+- Spot-check a few endpoints in each module via browser to confirm they load

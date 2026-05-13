@@ -1,0 +1,61 @@
+# Refactor: Split `app/models.py`
+
+This plan addresses section 2.5 of the improvement analysis, which notes that `app/models.py` is too large (1034 lines) and should be split into domain-grouped files.
+
+## Proposed Changes
+
+We will create a new directory `app/models/` and split the monolithic `app/models.py` into logical groups. We will create `app/models/__init__.py` to re-export all models so existing imports throughout the application (e.g., `from app.models import User, Employee`) will not break.
+
+### 1. `app/models/core.py`
+Contains foundational models shared across modules.
+- `Module`, `UserModule`, `User`, `AuditLog`, `LoginHistory`, `Notification`, `Holiday`
+- Also contains `validate_password_complexity`
+
+### 2. `app/models/hr.py`
+Contains Admin/HR configuration models.
+- `Department`, `Designation`, `Shift`, `LeavePolicy`, `AttendanceRule`
+
+### 3. `app/models/employee.py`
+Contains employee records and self-service domain models.
+- `Employee`, `Leave`, `LeaveBalance`, `Attendance`, `AttendanceRegularization`, `CompOff`, `ShiftSwapRequest`, `Timesheet`, `ProfileUpdateRequest`, `EmployeeDocument`
+
+### 4. `app/models/pm.py`
+Contains Project Management models.
+- `Project`, `ProjectMember`, `Task`, `Milestone`
+
+### 5. `app/models/recruitment.py`
+Contains recruitment tracking.
+- `JobPosting`, `Candidate`, `Interview`
+
+### 6. `app/models/performance.py`
+Contains performance evaluation models.
+- `PerformanceReview`
+
+### 7. `app/models/finance.py`
+Contains finance and payroll models.
+- `Expense`, `EmployeeExpense`, `Invoice`, `SalaryRecord`, `PayrollInput`
+
+### 8. `app/models/__init__.py`
+Will import and re-export all the above classes, for example:
+```python
+from .core import User, Module, UserModule, AuditLog, LoginHistory, Notification, Holiday, validate_password_complexity
+from .hr import Department, Designation, Shift, LeavePolicy, AttendanceRule
+from .employee import Employee, Leave, LeaveBalance, Attendance, AttendanceRegularization, CompOff, ShiftSwapRequest, Timesheet, ProfileUpdateRequest, EmployeeDocument
+from .pm import Project, ProjectMember, Task, Milestone
+from .recruitment import JobPosting, Candidate, Interview
+from .performance import PerformanceReview
+from .finance import Expense, EmployeeExpense, Invoice, SalaryRecord, PayrollInput
+```
+
+### 9. Delete `app/models.py`
+Once the new module is thoroughly verified, the old monolithic file will be deleted.
+
+## User Review Required
+
+> [!WARNING]  
+> This is a major structural change. While we will ensure all `db.relationship` and `db.ForeignKey` bindings use strings to prevent circular imports, separating models can sometimes reveal hidden dependencies. Please review the proposed domain separation to ensure it aligns with your architectural goals.
+
+## Verification Plan
+
+- After splitting, we will use the `run_command` tool to execute `python -c "from app import create_app; app = create_app(); print('App loaded successfully')"` to verify that SQLAlchemy can resolve all relationships without cyclic import errors.
+- We will also run `python -c "from app.models import User, Employee; print('Models imported')"` to ensure the `__init__.py` re-export works correctly.
