@@ -42,11 +42,11 @@ def seed_holidays():
         count = 0
         for h in holidays_2026:
             # Check if this holiday already exists to avoid duplicates
-            existing = Holiday.query.filter_by(date=h["date"], name=h["name"]).first()
+            existing = Holiday.query.filter_by(holiday_date=h["date"], holiday_name=h["name"]).first()
             if not existing:
                 new_holiday = Holiday(
-                    name=h["name"],
-                    date=h["date"],
+                    holiday_name=h["name"],
+                    holiday_date=h["date"],
                     holiday_type=h["holiday_type"],
                     description=h["description"]
                 )

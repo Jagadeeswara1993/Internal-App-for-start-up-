@@ -237,19 +237,29 @@ class Holiday(db.Model):
     __tablename__ = 'holidays'
 
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(150), nullable=False)
-    date = db.Column(db.Date, nullable=False)
-    holiday_type = db.Column(db.String(30), default='Public')     # Public, Restricted, Optional
-    description = db.Column(db.String(250), default='')
+    holiday_name = db.Column(db.String(255), nullable=False)
+    holiday_date = db.Column(db.Date, nullable=False)
+    holiday_day = db.Column(db.String(50), default='')
+    holiday_type = db.Column(db.String(100), default='Public')     # Public, Restricted, Optional
+    description = db.Column(db.Text, default='')
     is_active = db.Column(db.Boolean, default=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     creator = db.relationship('User', foreign_keys=[created_by])
 
-    __table_args__ = (db.UniqueConstraint('name', 'date', name='uq_holiday_name_date'),)
+    __table_args__ = (db.UniqueConstraint('holiday_name', 'holiday_date', name='uq_holiday_name_date'),)
+
+    # Convenience properties so existing code using .name / .date keeps working
+    @property
+    def name(self):
+        return self.holiday_name
+
+    @property
+    def date(self):
+        return self.holiday_date
 
     def __repr__(self):
-        return f'<Holiday {self.name} on {self.date}>'
+        return f'<Holiday {self.holiday_name} on {self.holiday_date}>'
 
 

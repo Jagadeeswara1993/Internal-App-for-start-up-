@@ -24,6 +24,7 @@ class LeaveRequestForm(FlaskForm):
     leave_type = SelectField('Leave Type', validators=[DataRequired()])
     start_date = DateField('Start Date', validators=[DataRequired()])
     end_date = DateField('End Date', validators=[DataRequired()])
+    is_half_day = BooleanField('Half-Day Leave (0.5 day)')
     reason = TextAreaField('Reason', validators=[Optional(), Length(max=500)])
     is_urgent = BooleanField('Mark as Urgent (skip manager, direct HR review)')
     submit = SubmitField('Submit Request')

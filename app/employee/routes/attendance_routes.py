@@ -132,6 +132,6 @@ def holiday_calendar():
     """View company holiday calendar for the current year."""
     year = request.args.get('year', date.today().year, type=int)
     holidays = Holiday.query.filter(
-        db.extract('year', Holiday.date) == year
-    ).order_by(Holiday.date).all()
+        db.extract('year', Holiday.holiday_date) == year
+    ).order_by(Holiday.holiday_date).all()
     return render_template('employee/holiday_calendar.html', holidays=holidays, year=year)

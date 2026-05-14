@@ -108,6 +108,8 @@ class LeavePolicy(db.Model):
     leave_type = db.Column(db.String(50), nullable=False)                 # Casual, Sick, Earned, etc.
     designation_id = db.Column(db.Integer, db.ForeignKey('designations.id'), nullable=True)  # NULL = all
     total_days = db.Column(db.Integer, nullable=False, default=12)
+    is_calendar_days = db.Column(db.Boolean, default=False)               # True = count calendar days (maternity, paternity); False = exclude weekends/holidays
+    is_prorated = db.Column(db.Boolean, default=False)                    # True = auto-prorate for mid-year joiners
     carry_forward = db.Column(db.Boolean, default=False)
     max_carry_days = db.Column(db.Integer, default=0)
     monthly_accrual = db.Column(db.Boolean, default=False)

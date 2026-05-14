@@ -56,9 +56,9 @@
                     <td style="text-align:center;">
                         {% if bal %}
                         <div style="font-size:1rem; font-weight:700; color:{% if bal.remaining > 5 %}var(--success){% elif bal.remaining > 0 %}#f59e0b{% else %}var(--danger){% endif %};">
-                            {{ bal.remaining }}
+                            {{ bal.remaining | round(1) }}
                         </div>
-                        <div style="font-size:0.65rem; color:var(--text-secondary);">{{ bal.used }}/{{ bal.total_allocated }} used</div>
+                        <div style="font-size:0.65rem; color:var(--text-secondary);">{{ bal.used | round(1) }}/{{ bal.total_allocated | round(1) }} used</div>
                         {% else %}
                         <span style="color:var(--text-secondary);">—</span>
                         {% endif %}

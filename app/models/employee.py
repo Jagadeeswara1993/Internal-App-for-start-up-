@@ -92,7 +92,8 @@ class Leave(db.Model):
     leave_type = db.Column(db.String(30), nullable=False)          # Casual, Sick, Earned
     start_date = db.Column(db.Date, nullable=False)
     end_date = db.Column(db.Date, nullable=False)
-    total_days = db.Column(db.Integer, default=1)
+    total_days = db.Column(db.Float, default=1)
+    is_half_day = db.Column(db.Boolean, default=False)             # True = half-day leave (0.5)
     status = db.Column(db.String(20), default='Pending')           # Pending, Approved, Rejected, Cancelled
     reason = db.Column(db.Text, default='')
     rejection_reason = db.Column(db.Text, default='')
@@ -112,15 +113,34 @@ class Leave(db.Model):
     manager_approver = db.relationship('User', foreign_keys=[manager_approved_by])
     hr_approver = db.relationship('User', foreign_keys=[hr_approved_by])
 
-    def calc_days(self):
-        """Calculate number of leave days (excluding weekends)."""
+    def calc_days(self, is_calendar_days=False):
+        """Calculate number of leave days.
+        - is_calendar_days=True: simple (end - start + 1) — for statutory leaves.
+        - is_calendar_days=False: excludes weekends and holidays.
+        - is_half_day=True: always returns 0.5 (single-day half leave)."""
+        if self.is_half_day:
+            return 0.5
         if not self.start_date or not self.end_date:
             return 0
+
+        from datetime import timedelta
+
+        # Calendar-days mode: count every day including weekends & holidays
+        if is_calendar_days:
+            return (self.end_date - self.start_date).days + 1
+
+        # Working-days mode: exclude weekends and holidays
+        from app.models.core import Holiday
+        holidays_in_range = Holiday.query.filter(
+            Holiday.holiday_date >= self.start_date,
+            Holiday.holiday_date <= self.end_date
+        ).all()
+        holiday_dates = {h.holiday_date for h in holidays_in_range}
+        
         count = 0
         current = self.start_date
-        from datetime import timedelta
         while current <= self.end_date:
-            if current.weekday() < 5:  # Mon-Fri
+            if current.weekday() < 5 and current not in holiday_dates:  # Mon-Fri and not a holiday
                 count += 1
             current += timedelta(days=1)
         return count
@@ -145,8 +165,8 @@ class LeaveBalance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     employee_id = db.Column(db.Integer, db.ForeignKey('employees.id', ondelete='CASCADE'), nullable=False)
     leave_type = db.Column(db.String(50), nullable=False)
-    total_allocated = db.Column(db.Integer, default=0)
-    used = db.Column(db.Integer, default=0)
+    total_allocated = db.Column(db.Float, default=0)
+    used = db.Column(db.Float, default=0)
     year = db.Column(db.Integer, nullable=False)
 
     __table_args__ = (db.UniqueConstraint('employee_id', 'leave_type', 'year', name='uq_emp_leave_year'),)

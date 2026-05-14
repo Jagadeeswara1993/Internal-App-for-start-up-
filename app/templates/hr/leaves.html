@@ -70,7 +70,10 @@
                     </td>
                     <td>{{ leave.start_date.strftime('%d %b %Y') }}</td>
                     <td>{{ leave.end_date.strftime('%d %b %Y') }}</td>
-                    <td><strong>{{ leave.total_days or leave.calc_days() }}</strong></td>
+                    <td>
+                        <strong>{{ (leave.total_days or leave.calc_days()) | round(1) }}</strong>
+                        {% if leave.is_half_day %}<span class="badge" style="background:#d946ef; color:#fff; font-size:0.6rem; margin-left:3px;">Half</span>{% endif %}
+                    </td>
                     <td style="font-size:0.85rem; color:var(--text-secondary); max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
                         {{ leave.reason or '—' }}
                     </td>

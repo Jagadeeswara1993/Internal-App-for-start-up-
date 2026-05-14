@@ -35,7 +35,7 @@
                     {% set pct = ((bal.remaining / bal.total_allocated) * 100) if bal.total_allocated > 0 else 0 %}
                     <div class="progress-bar bg-{% if pct > 50 %}success{% elif pct > 20 %}warning{% else %}danger{% endif %}" style="width:{{ pct }}%"></div>
                 </div>
-                <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">Used {{ bal.used }} of {{ bal.total_allocated }}</div>
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-top:4px;">Used {{ bal.used | round(1) }} of {{ bal.total_allocated | round(1) }}</div>
             </div>
         </div>
     </div>
@@ -63,7 +63,10 @@
                     <td class="fw-semibold">{{ leave.leave_type }}</td>
                     <td>{{ leave.start_date.strftime('%d %b %Y') }}</td>
                     <td>{{ leave.end_date.strftime('%d %b %Y') }}</td>
-                    <td>{{ leave.total_days }}</td>
+                    <td>
+                        {{ leave.total_days | round(1) }}
+                        {% if leave.is_half_day %}<span class="badge" style="background:#d946ef; color:#fff; font-size:0.65rem; margin-left:4px;">Half</span>{% endif %}
+                    </td>
                     <td style="max-width:180px;">{{ leave.reason[:60] }}{% if leave.reason|length > 60 %}…{% endif %}</td>
                     <td><span class="badge-status badge-{{ leave.status|lower }}">{{ leave.status }}</span></td>
                     <td>{{ leave.approver.full_name if leave.approver else '—' }}</td>

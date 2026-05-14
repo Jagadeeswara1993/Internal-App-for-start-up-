@@ -50,6 +50,33 @@
                 </div>
             </div>
 
+            <!-- Calendar Days & Proration Info Cards -->
+            <div class="col-md-6">
+                <div style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1px solid #7dd3fc; border-radius:10px; padding:14px 18px;">
+                    <div class="form-check form-switch mb-2">
+                        {{ form.is_calendar_days(class="form-check-input") }}
+                        {{ form.is_calendar_days.label(class="form-check-label fw-semibold") }}
+                    </div>
+                    <div style="font-size:0.78rem; color:#0369a1;">
+                        <i class="fas fa-info-circle me-1"></i>
+                        Enable for statutory leaves (Maternity, Paternity, Long-term Medical) where weekends and holidays should <strong>not</strong> be excluded from the count.
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1px solid #86efac; border-radius:10px; padding:14px 18px;">
+                    <div class="form-check form-switch mb-2">
+                        {{ form.is_prorated(class="form-check-input") }}
+                        {{ form.is_prorated.label(class="form-check-label fw-semibold") }}
+                    </div>
+                    <div style="font-size:0.78rem; color:#166534;">
+                        <i class="fas fa-info-circle me-1"></i>
+                        When enabled, employees joining mid-year will receive a proportional allocation based on their remaining months. E.g., joining in July → 6/12 = 50% of total days.
+                    </div>
+                </div>
+            </div>
+
             <!-- Toggle Options Row -->
             <div class="col-12">
                 <div class="d-flex flex-wrap gap-4 mt-2">

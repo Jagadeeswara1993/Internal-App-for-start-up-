@@ -196,7 +196,10 @@ def add_leave_policy():
             return render_template('admin/leave_policy_form.html', form=form, title='Add Leave Policy')
         policy = LeavePolicy(
             leave_type=form.leave_type.data, designation_id=desig_id,
-            total_days=form.total_days.data, carry_forward=form.carry_forward.data,
+            total_days=form.total_days.data,
+            is_calendar_days=form.is_calendar_days.data,
+            is_prorated=form.is_prorated.data,
+            carry_forward=form.carry_forward.data,
             max_carry_days=form.max_carry_days.data or 0,
             monthly_accrual=form.monthly_accrual.data,
             encashment_allowed=form.encashment_allowed.data,
@@ -228,6 +231,8 @@ def edit_leave_policy(policy_id):
         policy.leave_type = form.leave_type.data
         policy.designation_id = desig_id
         policy.total_days = form.total_days.data
+        policy.is_calendar_days = form.is_calendar_days.data
+        policy.is_prorated = form.is_prorated.data
         policy.carry_forward = form.carry_forward.data
         policy.max_carry_days = form.max_carry_days.data or 0
         policy.monthly_accrual = form.monthly_accrual.data
@@ -346,8 +351,8 @@ def holidays():
     """View company holiday calendar."""
     year = request.args.get('year', __import__('datetime').date.today().year, type=int)
     query = Holiday.query.filter(
-        db.extract('year', Holiday.date) == year
-    ).order_by(Holiday.date)
+        db.extract('year', Holiday.holiday_date) == year
+    ).order_by(Holiday.holiday_date)
     all_holidays = query.all()
     return render_template('admin/holidays.html', holidays=all_holidays, year=year)
 
@@ -370,12 +375,12 @@ def add_holiday():
         except ValueError:
             flash('Invalid date format.', 'danger')
             return render_template('admin/holiday_form.html', title='Add Holiday')
-        existing = Holiday.query.filter_by(name=name, date=h_date).first()
+        existing = Holiday.query.filter_by(holiday_name=name, holiday_date=h_date).first()
         if existing:
             flash('A holiday with this name and date already exists.', 'danger')
             return render_template('admin/holiday_form.html', title='Add Holiday')
         holiday = Holiday(
-            name=name, date=h_date, holiday_type=holiday_type,
+            holiday_name=name, holiday_date=h_date, holiday_type=holiday_type,
             description=description, created_by=current_user.id
         )
         db.session.add(holiday)
@@ -392,13 +397,13 @@ def edit_holiday(holiday_id):
     """Edit a company holiday."""
     holiday = Holiday.query.get_or_404(holiday_id)
     if request.method == 'POST':
-        holiday.name = request.form.get('name', '').strip()
+        holiday.holiday_name = request.form.get('name', '').strip()
         date_str = request.form.get('date', '').strip()
         holiday.holiday_type = request.form.get('holiday_type', 'Public')
         holiday.description = request.form.get('description', '').strip()
         from datetime import datetime as dt
         try:
-            holiday.date = dt.strptime(date_str, '%Y-%m-%d').date()
+            holiday.holiday_date = dt.strptime(date_str, '%Y-%m-%d').date()
         except ValueError:
             flash('Invalid date format.', 'danger')
             return render_template('admin/holiday_form.html', title='Edit Holiday', holiday=holiday)
@@ -420,3 +425,129 @@ def delete_holiday(holiday_id):
     db.session.commit()
     flash(f'Holiday "{holiday.name}" deleted.', 'warning')
     return redirect(url_for('admin.holidays'))
+
+
+@bp.route('/holidays/upload', methods=['POST'])
+@admin_required
+def upload_holidays():
+    """Bulk upload holidays via Excel or CSV."""
+    import pandas as pd
+    from datetime import datetime
+    import os
+    from werkzeug.utils import secure_filename
+
+    if 'file' not in request.files:
+        flash('No file uploaded.', 'danger')
+        return redirect(url_for('admin.holidays'))
+        
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected.', 'danger')
+        return redirect(url_for('admin.holidays'))
+        
+    if not (file.filename.endswith('.csv') or file.filename.endswith('.xlsx')):
+        flash('Invalid file format. Please upload a .csv or .xlsx file.', 'danger')
+        return redirect(url_for('admin.holidays'))
+        
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+            
+        # Standardize column names
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        
+        required_cols = ['holiday_name', 'holiday_date']
+        for col in required_cols:
+            if col not in df.columns:
+                flash(f'Missing required column: {col}', 'danger')
+                return redirect(url_for('admin.holidays'))
+            
+        added_count = 0
+        skipped_count = 0
+        
+        for index, row in df.iterrows():
+            name = str(row.get('holiday_name', '')).strip()
+            date_val = row.get('holiday_date')
+            
+            if not name or name == 'nan' or pd.isna(date_val):
+                continue
+                
+            # Parse date
+            try:
+                if isinstance(date_val, str):
+                    h_date = datetime.strptime(str(date_val).strip()[:10], '%Y-%m-%d').date()
+                else:
+                    h_date = date_val.date() if hasattr(date_val, 'date') else date_val
+            except Exception:
+                skipped_count += 1
+                continue
+                
+            h_day = str(row.get('holiday_day', '')).strip()
+            if h_day == 'nan':
+                h_day = h_date.strftime('%A')
+                
+            h_type = str(row.get('holiday_type', 'Public')).strip()
+            if h_type not in ['Public', 'Restricted', 'Optional']:
+                h_type = 'Public'
+                
+            desc = str(row.get('description', '')).strip()
+            if desc == 'nan': 
+                desc = ''
+            
+            # Prevent duplicate holiday dates
+            existing = Holiday.query.filter_by(holiday_date=h_date).first()
+            if existing:
+                # Update existing if duplicate found
+                existing.holiday_name = name
+                existing.holiday_day = h_day
+                existing.holiday_type = h_type
+                existing.description = desc
+                added_count += 1
+                continue
+                
+            holiday = Holiday(
+                holiday_name=name,
+                holiday_date=h_date,
+                holiday_day=h_day,
+                holiday_type=h_type,
+                description=desc,
+                created_by=current_user.id
+            )
+            db.session.add(holiday)
+            added_count += 1
+            
+        if added_count > 0:
+            log_audit(current_user.id, 'BULK_UPLOAD', 'Holiday', None, f'Bulk uploaded/updated {added_count} holidays')
+            db.session.commit()
+            flash(f'Upload complete: {added_count} holidays processed successfully. Skipped rows: {skipped_count}', 'success')
+        else:
+            flash(f'No new valid holidays found to upload. Skipped rows: {skipped_count}', 'info')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error processing file: {str(e)}', 'danger')
+        
+    return redirect(url_for('admin.holidays'))
+
+
+@bp.route('/holidays/template/download')
+@admin_required
+def download_holiday_template():
+    """Download CSV template for bulk holiday upload."""
+    import csv
+    import io
+    from flask import Response
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['holiday_name', 'holiday_date', 'holiday_day', 'holiday_type', 'description'])
+    writer.writerow(['New Year', '2026-01-01', 'Thursday', 'Public', 'New Year Day'])
+    writer.writerow(['Diwali', '2026-11-08', 'Sunday', 'Public', 'Festival of Lights'])
+    
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=holiday_template.csv"}
+    )

@@ -212,20 +212,26 @@ def get_my_leaves(employee_id, status=None):
         return []
 
 
-def submit_leave_request(employee, leave_type, start_date, end_date, reason='', is_urgent=False, ip=''):
+def submit_leave_request(employee, leave_type, start_date, end_date, reason='', is_urgent=False, is_half_day=False, ip=''):
     """Submit a new leave request with manager/HR notification workflow.
     - If employee has a reporting manager AND leave is NOT urgent:
       manager_status='Pending', notify both Manager and HR.
     - If employee has NO manager OR leave IS urgent:
       manager_status='N/A', notify HR only (skip manager step).
+    Supports half-day leaves (is_half_day=True) and calendar-days policies.
     Returns (success, message)."""
     try:
-        from app.hr.services import validate_leave_request
+        from app.hr.services import validate_leave_request, get_leave_policies_for_employee
         valid, msg = validate_leave_request(
-            employee.id, leave_type, start_date, end_date
+            employee.id, leave_type, start_date, end_date, is_half_day=is_half_day
         )
         if not valid:
             return False, msg
+
+        # Look up policy for calendar-days mode
+        policies = get_leave_policies_for_employee(employee.id)
+        policy = next((p for p in policies if p.leave_type == leave_type), None)
+        is_calendar = policy.is_calendar_days if policy else False
 
         # Determine if manager step applies
         has_manager = employee.reporting_manager_id is not None
@@ -239,20 +245,25 @@ def submit_leave_request(employee, leave_type, start_date, end_date, reason='', 
             reason=reason,
             status='Pending',
             is_urgent=is_urgent,
+            is_half_day=is_half_day,
             manager_status='N/A' if skip_manager else 'Pending',
             hr_status='Pending'
         )
-        leave.total_days = leave.calc_days()
+        leave.total_days = leave.calc_days(is_calendar_days=is_calendar)
         db.session.add(leave)
 
+        # Format days for display
+        days_label = f'{leave.total_days:g}'
+        half_label = ' (Half-Day)' if is_half_day else ''
+
         log_employee_action('SUBMIT', 'Leave', None,
-                          f'{leave_type}: {start_date} to {end_date} ({leave.total_days}d)', ip)
+                          f'{leave_type}: {start_date} to {end_date} ({days_label}d{half_label})', ip)
 
         # --- NOTIFICATION: Employee confirmation ---
         create_notification(
             employee.user_id,
             'Leave Request Submitted',
-            f'Your {leave_type} request for {leave.total_days} day(s) has been submitted.',
+            f'Your {leave_type} request for {days_label} day(s){half_label} has been submitted.',
             category='info',
             link='/employee/leaves'
         )
@@ -264,7 +275,7 @@ def submit_leave_request(employee, leave_type, start_date, end_date, reason='', 
                 'Leave Request from Team Member',
                 f'{employee.user.full_name} ({employee.emp_code}) has requested '
                 f'{leave_type} leave from {start_date.strftime("%d %b")} to '
-                f'{end_date.strftime("%d %b")} ({leave.total_days}d). '
+                f'{end_date.strftime("%d %b")} ({days_label}d{half_label}). '
                 f'Reason: {reason or "Not specified"}',
                 category='warning',
                 link='/employee/team/leaves'
@@ -280,7 +291,7 @@ def submit_leave_request(employee, leave_type, start_date, end_date, reason='', 
                     hr_user.id,
                     f'Leave Request{urgency_label}',
                     f'{employee.user.full_name} ({employee.emp_code}) applied for '
-                    f'{leave_type} leave ({leave.total_days}d). '
+                    f'{leave_type} leave ({days_label}d{half_label}). '
                     f'{"Awaiting your direct review." if skip_manager else "Awaiting manager approval first."}',
                     category='warning' if is_urgent else 'info',
                     link='/hr/leaves'
@@ -312,15 +323,15 @@ def submit_leave_request(employee, leave_type, start_date, end_date, reason='', 
                 'Team Member Leave — FYI',
                 f'{employee.user.full_name} ({employee.emp_code}) has applied for '
                 f'{leave_type} leave from {start_date.strftime("%d %b")} to '
-                f'{end_date.strftime("%d %b")} ({leave.total_days}d). '
+                f'{end_date.strftime("%d %b")} ({days_label}d{half_label}). '
                 f'Project: {proj.name}. This is for your planning awareness — no action required.',
                 category='info',
                 link=None
             )
 
-        logger.info(f'Leave request submitted: emp#{employee.id} {leave_type} {leave.total_days}d '
-                    f'urgent={is_urgent} skip_manager={skip_manager} pm_fyi={len(notified_pm_ids)}')
-        return True, f'Leave request submitted ({leave.total_days} day(s))'
+        logger.info(f'Leave request submitted: emp#{employee.id} {leave_type} {days_label}d '
+                    f'half_day={is_half_day} urgent={is_urgent} skip_manager={skip_manager} pm_fyi={len(notified_pm_ids)}')
+        return True, f'Leave request submitted ({days_label} day(s){half_label})'
     except Exception as e:
         logger.error(f'Error submitting leave request: {e}')
         return False, 'An error occurred while submitting your leave request'

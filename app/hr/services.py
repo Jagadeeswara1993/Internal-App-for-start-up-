@@ -339,17 +339,33 @@ def get_all_leave_balances(employee_id, year=None):
 def initialize_leave_balances(employee_id, year=None):
     """Initialize leave balances for an employee based on applicable policies.
     Uses designation-specific policies if available, otherwise global defaults.
+    Supports proration: if the policy has is_prorated=True, the allocation is
+    calculated proportionally based on the employee's date_of_joining.
     Called when an employee is created or at the start of a new year."""
+    import math
     year = year or date.today().year
     policies = get_leave_policies_for_employee(employee_id)
+    emp = Employee.query.get(employee_id)
+
     for policy in policies:
         existing = LeaveBalance.query.filter_by(
             employee_id=employee_id, leave_type=policy.leave_type, year=year
         ).first()
         if not existing:
+            allocated = policy.total_days
+
+            # Prorate if policy says so and the employee joined mid-year
+            if policy.is_prorated and emp and emp.date_of_joining:
+                doj = emp.date_of_joining
+                if doj.year == year:
+                    # Months remaining (including the joining month)
+                    remaining_months = 12 - doj.month + 1
+                    allocated = round(policy.total_days * remaining_months / 12, 1)
+                # If doj year < current year, they get the full allocation
+
             balance = LeaveBalance(
                 employee_id=employee_id, leave_type=policy.leave_type,
-                total_allocated=policy.total_days, used=0, year=year
+                total_allocated=allocated, used=0, year=year
             )
             db.session.add(balance)
     db.session.flush()
@@ -375,8 +391,9 @@ def _check_blackout_dates(policy, start_date, end_date):
     return False, ''
 
 
-def validate_leave_request(employee_id, leave_type, start_date, end_date):
+def validate_leave_request(employee_id, leave_type, start_date, end_date, is_half_day=False):
     """Validate a leave request against Admin policies (role-based).
+    Supports calendar-days mode and half-day leaves.
     Returns (valid, error_message)."""
     # 1. Find applicable policy
     policies = get_leave_policies_for_employee(employee_id)
@@ -384,16 +401,33 @@ def validate_leave_request(employee_id, leave_type, start_date, end_date):
     if not policy:
         return False, f'Leave type "{leave_type}" is not configured or inactive for your role'
 
-    # 2. Calculate requested days (excluding weekends)
-    requested_days = 0
-    current = start_date
-    while current <= end_date:
-        if current.weekday() < 5:
-            requested_days += 1
-        current += timedelta(days=1)
+    # 2. Calculate requested days based on policy counting mode
+    if is_half_day:
+        # Half-day: always 0.5, enforce single-day selection
+        if start_date != end_date:
+            return False, 'Half-day leave must be for a single day only'
+        requested_days = 0.5
+    elif policy.is_calendar_days:
+        # Calendar-days mode: count every day (for statutory leaves like maternity)
+        requested_days = (end_date - start_date).days + 1
+    else:
+        # Working-days mode: exclude weekends and holidays
+        from app.models import Holiday
+        holidays_in_range = Holiday.query.filter(
+            Holiday.holiday_date >= start_date,
+            Holiday.holiday_date <= end_date
+        ).all()
+        holiday_dates = {h.holiday_date for h in holidays_in_range}
+
+        requested_days = 0
+        current = start_date
+        while current <= end_date:
+            if current.weekday() < 5 and current not in holiday_dates:
+                requested_days += 1
+            current += timedelta(days=1)
 
     if requested_days == 0:
-        return False, 'No working days in the selected range'
+        return False, 'No working days in the selected range (only weekends or holidays)'
 
     # 3. Check max per request
     if policy.max_per_request and requested_days > policy.max_per_request:
@@ -425,7 +459,10 @@ def validate_leave_request(employee_id, leave_type, start_date, end_date):
     if overlapping:
         return False, f'Overlapping leave exists ({overlapping.start_date} to {overlapping.end_date})'
 
-    return True, f'{requested_days} day(s) requested'
+    # Format display nicely
+    day_label = f'{requested_days:g}' if isinstance(requested_days, float) else str(requested_days)
+    mode_label = ' (calendar days)' if policy.is_calendar_days else ''
+    return True, f'{day_label} day(s) requested{mode_label}'
 
 
 def approve_leave(leave_id, approver_id, step='hr'):
@@ -438,12 +475,17 @@ def approve_leave(leave_id, approver_id, step='hr'):
     if leave.status not in ('Pending',):
         return False, f'Leave is already {leave.status}'
 
-    days = leave.calc_days()
+    # Look up policy to determine calendar-days mode
+    policies = get_leave_policies_for_employee(leave.employee_id)
+    policy = next((p for p in policies if p.leave_type == leave.leave_type), None)
+    is_calendar = policy.is_calendar_days if policy else False
+
+    days = leave.calc_days(is_calendar_days=is_calendar)
 
     if step == 'manager':
         leave.manager_status = 'Approved'
         leave.manager_approved_by = approver_id
-        return True, f'Manager approved leave ({days} days). Awaiting HR final approval.'
+        return True, f'Manager approved leave ({days:g} days). Awaiting HR final approval.'
 
     # HR approval (final step)
     leave.hr_status = 'Approved'
@@ -456,10 +498,10 @@ def approve_leave(leave_id, approver_id, step='hr'):
     balance = get_leave_balance(leave.employee_id, leave.leave_type, leave.start_date.year)
     if balance:
         if balance.remaining < days:
-            return False, f'Insufficient balance ({balance.remaining} remaining, {days} needed)'
+            return False, f'Insufficient balance ({balance.remaining} remaining, {days:g} needed)'
         balance.used += days
 
-    return True, f'Leave approved ({days} days deducted)'
+    return True, f'Leave approved ({days:g} days deducted)'
 
 
 def reject_leave(leave_id, approver_id, reason='', step='hr'):

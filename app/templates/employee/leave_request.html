@@ -32,16 +32,28 @@
                 <div class="row g-3">
                     <div class="col-md-12">
                         {{ form.leave_type.label(class="form-label") }}
-                        {{ form.leave_type(class="form-select") }}
+                        {{ form.leave_type(class="form-select", id="leave-type-select") }}
                     </div>
                     <div class="col-md-6">
                         {{ form.start_date.label(class="form-label") }}
-                        {{ form.start_date(class="form-control", type="date") }}
+                        {{ form.start_date(class="form-control", type="date", id="start-date") }}
                     </div>
                     <div class="col-md-6">
                         {{ form.end_date.label(class="form-label") }}
-                        {{ form.end_date(class="form-control", type="date") }}
+                        {{ form.end_date(class="form-control", type="date", id="end-date") }}
                     </div>
+
+                    <!-- Half-Day Leave Option -->
+                    <div class="col-12" id="half-day-container">
+                        <div class="form-check" style="padding:12px 16px 12px 40px; background:linear-gradient(135deg,#fdf4ff,#fae8ff); border:1px solid #d946ef; border-radius:8px;">
+                            {{ form.is_half_day(class="form-check-input", id="half-day-check") }}
+                            {{ form.is_half_day.label(class="form-check-label", style="font-size:0.88rem; font-weight:500; color:#86198f;") }}
+                            <div style="font-size:0.78rem; color:#a21caf; margin-top:2px; padding-left:4px;">
+                                <i class="fas fa-info-circle me-1"></i>Select this for a half-day (0.5) leave. Start and end date must be the same day.
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="col-12">
                         {{ form.reason.label(class="form-label") }}
                         {{ form.reason(class="form-control", rows=3, placeholder="Reason for leave (optional)...") }}
@@ -75,7 +87,7 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between mb-1" style="font-size:0.85rem;">
                         <span class="fw-semibold">{{ bal.leave_type }}</span>
-                        <span>{{ bal.remaining }} / {{ bal.total_allocated }}</span>
+                        <span>{{ bal.remaining | round(1) }} / {{ bal.total_allocated | round(1) }}</span>
                     </div>
                     <div class="progress" style="height:5px;">
                         {% set pct = ((bal.remaining / bal.total_allocated) * 100) if bal.total_allocated > 0 else 0 %}
@@ -89,4 +101,32 @@
         </div>
     </div>
 </div>
+
+<script>
+// Auto-sync end date when half-day is checked
+document.addEventListener('DOMContentLoaded', function() {
+    const halfDayCheck = document.getElementById('half-day-check');
+    const startDate = document.getElementById('start-date');
+    const endDate = document.getElementById('end-date');
+
+    if (halfDayCheck) {
+        halfDayCheck.addEventListener('change', function() {
+            if (this.checked) {
+                endDate.value = startDate.value;
+                endDate.setAttribute('readonly', true);
+                endDate.style.opacity = '0.6';
+            } else {
+                endDate.removeAttribute('readonly');
+                endDate.style.opacity = '1';
+            }
+        });
+
+        startDate.addEventListener('change', function() {
+            if (halfDayCheck.checked) {
+                endDate.value = startDate.value;
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

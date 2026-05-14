@@ -30,6 +30,8 @@ class LeavePolicyForm(FlaskForm):
     designation_id = SelectField('Linked Designation (Role)', coerce=int,
                                  validators=[Optional()], default=0)
     total_days = IntegerField('Total Days per Year', validators=[DataRequired(), NumberRange(1, 365)])
+    is_calendar_days = BooleanField('Calendar Days (include weekends & holidays)', default=False)
+    is_prorated = BooleanField('Auto-Prorate for New Joiners', default=False)
     carry_forward = BooleanField('Allow Carry Forward', default=False)
     max_carry_days = IntegerField('Max Carry Forward Days', validators=[Optional()], default=0)
     monthly_accrual = BooleanField('Monthly Accrual', default=False)

@@ -1,0 +1,1355 @@
+"""Admin routes — user CRUD, module assignment, HR configuration, Shift management."""
+
+import secrets
+import string
+from flask import render_template, redirect, url_for, flash, request, session
+from app.admin import bp
+from app.decorators import admin_required
+from app.extensions import db
+from app.models import (User, Module, UserModule, Employee, Project, Task,
+                        Milestone, Notification,
+                        Department, Designation, LeavePolicy, AttendanceRule, AuditLog,
+                        Shift, Timesheet, LoginHistory, Holiday, ProfileUpdateRequest,
+                        validate_password_complexity)
+from app.admin.forms import UserCreateForm, UserEditForm, ModuleAssignForm
+from app.admin.config_forms import (DepartmentForm, DesignationForm,
+                                     LeavePolicyForm, AttendanceRuleForm, ShiftForm)
+
+
+def generate_readable_password():
+    """Generate a readable temporary password like 'Welcome@7842'."""
+    digits = ''.join(secrets.choice(string.digits) for _ in range(4))
+    return f'Welcome@{digits}'
+
+
+def log_audit(user_id, action, entity_type, entity_id=None, details=''):
+    """Write an audit log entry."""
+    from flask import request as req
+    log = AuditLog(
+        user_id=user_id, action=action, entity_type=entity_type,
+        entity_id=entity_id, details=details,
+        ip_address=req.remote_addr or ''
+    )
+    db.session.add(log)
+
+
+# ===========================================================================
+# DASHBOARD
+# ===========================================================================
+@bp.route('/')
+@admin_required
+def dashboard():
+    total_users = User.query.count()
+    active_users = User.query.filter_by(is_active_user=True).count()
+    total_modules = Module.query.count()
+    total_employees = Employee.query.count()
+    total_projects = Project.query.count()
+    total_notifications = Notification.query.count()
+    total_departments = Department.query.count()
+    total_designations = Designation.query.count()
+    total_shifts = Shift.query.filter_by(is_active=True).count()
+    total_leave_policies = LeavePolicy.query.filter_by(is_active=True).count()
+    recent_users = User.query.order_by(User.created_at.desc()).limit(5).all()
+
+    # Count unassigned employees for onboarding visibility
+    from app.hr import services as hr_services
+    unassigned_employees = hr_services.get_unassigned_count()
+
+    # Timesheet stats
+    total_timesheets = Timesheet.query.count()
+    pending_timesheets = Timesheet.query.filter_by(status='Pending').count()
+
+    return render_template('admin/dashboard.html',
+                           total_users=total_users,
+                           active_users=active_users,
+                           total_modules=total_modules,
+                           total_employees=total_employees,
+                           total_projects=total_projects,
+                           total_notifications=total_notifications,
+                           total_departments=total_departments,
+                           total_designations=total_designations,
+                           total_shifts=total_shifts,
+                           total_leave_policies=total_leave_policies,
+                           recent_users=recent_users,
+                           unassigned_employees=unassigned_employees,
+                           total_timesheets=total_timesheets,
+                           pending_timesheets=pending_timesheets)
+
+
+# ===========================================================================
+# USER MANAGEMENT (unchanged)
+# ===========================================================================
+@bp.route('/users')
+@admin_required
+def users():
+    all_users = User.query.order_by(User.created_at.desc()).all()
+    new_user_info = session.pop('new_user_info', None)
+    from app.hr import services as hr_services
+    return render_template('admin/users.html', users=all_users,
+                           new_user_info=new_user_info,
+                           is_profile_complete=hr_services.is_employee_profile_complete)
+
+
+@bp.route('/users/add', methods=['GET', 'POST'])
+@admin_required
+def add_user():
+    form = UserCreateForm()
+    all_modules = Module.query.order_by(Module.name).all()
+    form.modules.choices = [(m.id, m.name) for m in all_modules]
+
+    if form.validate_on_submit():
+        if User.query.filter_by(username=form.username.data).first():
+            flash('Username already exists.', 'danger')
+            return render_template('admin/user_form.html', form=form, title='Add User', all_modules=all_modules)
+        if User.query.filter_by(email=form.email.data).first():
+            flash('Email already exists.', 'danger')
+            return render_template('admin/user_form.html', form=form, title='Add User', all_modules=all_modules)
+
+        selected_ids = set(form.modules.data or [])
+        admin_module = Module.query.filter_by(slug='admin').first()
+        is_admin_selected = (admin_module and admin_module.id in selected_ids)
+
+        temp_password = generate_readable_password()
+        user = User(
+            username=form.username.data, email=form.email.data,
+            full_name=form.full_name.data, phone=form.phone.data,
+            is_admin=is_admin_selected, must_change_password=True
+        )
+        user.set_password(temp_password)
+        db.session.add(user)
+        db.session.flush()
+
+        selected_ids = set(form.modules.data or [])
+        emp_module = Module.query.filter_by(slug='employee').first()
+        if emp_module:
+            selected_ids.add(emp_module.id)
+        for mod_id in selected_ids:
+            db.session.add(UserModule(user_id=user.id, module_id=mod_id))
+
+        # Auto-create an employee profile so the user can access Employee module without 404
+        emp = Employee(
+            user_id=user.id,
+            emp_code=f"EMP{user.id:04d}"
+        )
+        db.session.add(emp)
+        db.session.flush()
+        
+        from app.hr import services
+        services.initialize_leave_balances(emp.id)
+
+        from flask_login import current_user
+        log_audit(current_user.id, 'CREATE', 'User', user.id, f'Created user {user.username}')
+        db.session.commit()
+
+        session['new_user_info'] = {
+            'username': user.username, 'full_name': user.full_name,
+            'password': temp_password
+        }
+        flash(f'User "{user.username}" created successfully.', 'success')
+        return redirect(url_for('admin.users'))
+    return render_template('admin/user_form.html', form=form, title='Add User', all_modules=all_modules)
+
+
+@bp.route('/users/<int:user_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+    form = UserEditForm(obj=user)
+    all_modules = Module.query.order_by(Module.name).all()
+    form.modules.choices = [(m.id, m.name) for m in all_modules]
+
+    if request.method == 'GET':
+        form.is_active.data = user.is_active_user
+        form.modules.data = [m.id for m in user.modules]
+
+    if form.validate_on_submit():
+        existing = User.query.filter(User.username == form.username.data, User.id != user.id).first()
+        if existing:
+            flash('Username already taken.', 'danger')
+            return render_template('admin/user_form.html', form=form, title='Edit User', user=user, all_modules=all_modules)
+        existing = User.query.filter(User.email == form.email.data, User.id != user.id).first()
+        if existing:
+            flash('Email already taken.', 'danger')
+            return render_template('admin/user_form.html', form=form, title='Edit User', user=user, all_modules=all_modules)
+
+        user.username = form.username.data
+        user.email = form.email.data
+        user.full_name = form.full_name.data
+        user.phone = form.phone.data
+        user.is_active_user = form.is_active.data
+        if form.password.data:
+            user.set_password(form.password.data)
+
+        UserModule.query.filter_by(user_id=user.id).delete()
+        selected_ids = set(form.modules.data or [])
+        admin_module = Module.query.filter_by(slug='admin').first()
+        user.is_admin = (admin_module and admin_module.id in selected_ids)
+
+        emp_module = Module.query.filter_by(slug='employee').first()
+        if emp_module:
+            selected_ids.add(emp_module.id)
+        for mod_id in selected_ids:
+            db.session.add(UserModule(user_id=user.id, module_id=mod_id))
+
+        from flask_login import current_user
+        log_audit(current_user.id, 'UPDATE', 'User', user.id, f'Updated user {user.username}')
+        db.session.commit()
+        flash(f'User "{user.username}" updated.', 'success')
+        return redirect(url_for('admin.users'))
+    return render_template('admin/user_form.html', form=form, title='Edit User', user=user, all_modules=all_modules)
+
+
+@bp.route('/users/<int:user_id>/delete', methods=['POST'])
+@admin_required
+def delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.is_admin:
+        flash('Cannot delete an admin user.', 'danger')
+        return redirect(url_for('admin.users'))
+    user.is_active_user = False
+    from flask_login import current_user
+    log_audit(current_user.id, 'DEACTIVATE', 'User', user.id, f'Deactivated user {user.username}')
+    db.session.commit()
+    flash(f'User "{user.username}" deactivated.', 'warning')
+    return redirect(url_for('admin.users'))
+
+
+@bp.route('/users/<int:user_id>/modules', methods=['GET', 'POST'])
+@admin_required
+def assign_modules(user_id):
+    user = User.query.get_or_404(user_id)
+    form = ModuleAssignForm()
+    all_modules = Module.query.order_by(Module.name).all()
+    form.modules.choices = [(m.id, m.name) for m in all_modules]
+    if request.method == 'GET':
+        form.modules.data = [m.id for m in user.modules]
+    if form.validate_on_submit():
+        UserModule.query.filter_by(user_id=user.id).delete()
+        for mod_id in form.modules.data:
+            db.session.add(UserModule(user_id=user.id, module_id=mod_id))
+        db.session.commit()
+        flash(f'Permissions updated for "{user.username}".', 'success')
+        return redirect(url_for('admin.users'))
+    return render_template('admin/assign_modules.html', form=form, user=user, modules=all_modules)
+
+
+@bp.route('/users/<int:user_id>/reset-password', methods=['POST'])
+@admin_required
+def reset_password(user_id):
+    user = User.query.get_or_404(user_id)
+    temp_password = generate_readable_password()
+    user.set_password(temp_password)
+    user.must_change_password = True
+    db.session.commit()
+    session['new_user_info'] = {
+        'username': user.username, 'full_name': user.full_name, 'password': temp_password
+    }
+    flash(f'Password reset for "{user.username}". See the credentials below.', 'success')
+    return redirect(url_for('admin.users'))
+
+
+# ===========================================================================
+# DEPARTMENT MANAGEMENT (NEW)
+# ===========================================================================
+@bp.route('/departments')
+@admin_required
+def departments():
+    all_depts = Department.query.order_by(Department.name).all()
+    return render_template('admin/departments.html', departments=all_depts)
+
+
+@bp.route('/departments/add', methods=['GET', 'POST'])
+@admin_required
+def add_department():
+    form = DepartmentForm()
+    if form.validate_on_submit():
+        if Department.query.filter_by(code=form.code.data).first():
+            flash('Department code already exists.', 'danger')
+            return render_template('admin/department_form.html', form=form, title='Add Department')
+        dept = Department(
+            name=form.name.data, code=form.code.data.upper(),
+            description=form.description.data or '', is_active=form.is_active.data
+        )
+        db.session.add(dept)
+        from flask_login import current_user
+        log_audit(current_user.id, 'CREATE', 'Department', None, f'Created dept {dept.code}')
+        db.session.commit()
+        flash(f'Department "{dept.name}" created.', 'success')
+        return redirect(url_for('admin.departments'))
+    return render_template('admin/department_form.html', form=form, title='Add Department')
+
+
+@bp.route('/departments/<int:dept_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_department(dept_id):
+    dept = Department.query.get_or_404(dept_id)
+    form = DepartmentForm(obj=dept)
+    if form.validate_on_submit():
+        existing = Department.query.filter(Department.code == form.code.data, Department.id != dept.id).first()
+        if existing:
+            flash('Department code already taken.', 'danger')
+            return render_template('admin/department_form.html', form=form, title='Edit Department', dept=dept)
+        dept.name = form.name.data
+        dept.code = form.code.data.upper()
+        dept.description = form.description.data or ''
+        dept.is_active = form.is_active.data
+        from flask_login import current_user
+        log_audit(current_user.id, 'UPDATE', 'Department', dept.id, f'Updated dept {dept.code}')
+        db.session.commit()
+        flash(f'Department "{dept.name}" updated.', 'success')
+        return redirect(url_for('admin.departments'))
+    return render_template('admin/department_form.html', form=form, title='Edit Department', dept=dept)
+
+
+# ===========================================================================
+# DESIGNATION MANAGEMENT (NEW)
+# ===========================================================================
+@bp.route('/designations')
+@admin_required
+def designations():
+    all_desig = Designation.query.order_by(Designation.department_id, Designation.level).all()
+    return render_template('admin/designations.html', designations=all_desig)
+
+
+@bp.route('/designations/add', methods=['GET', 'POST'])
+@admin_required
+def add_designation():
+    form = DesignationForm()
+    form.department_id.choices = [(d.id, d.name) for d in Department.query.filter_by(is_active=True).order_by(Department.name)]
+    if form.validate_on_submit():
+        desig = Designation(
+            title=form.title.data, department_id=form.department_id.data,
+            level=form.level.data, is_active=form.is_active.data
+        )
+        db.session.add(desig)
+        from flask_login import current_user
+        log_audit(current_user.id, 'CREATE', 'Designation', None, f'Created designation {desig.title}')
+        db.session.commit()
+        flash(f'Designation "{desig.title}" created.', 'success')
+        return redirect(url_for('admin.designations'))
+    return render_template('admin/designation_form.html', form=form, title='Add Designation')
+
+
+@bp.route('/designations/<int:desig_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_designation(desig_id):
+    desig = Designation.query.get_or_404(desig_id)
+    form = DesignationForm(obj=desig)
+    form.department_id.choices = [(d.id, d.name) for d in Department.query.filter_by(is_active=True).order_by(Department.name)]
+    if form.validate_on_submit():
+        desig.title = form.title.data
+        desig.department_id = form.department_id.data
+        desig.level = form.level.data
+        desig.is_active = form.is_active.data
+        from flask_login import current_user
+        log_audit(current_user.id, 'UPDATE', 'Designation', desig.id, f'Updated designation {desig.title}')
+        db.session.commit()
+        flash(f'Designation "{desig.title}" updated.', 'success')
+        return redirect(url_for('admin.designations'))
+    return render_template('admin/designation_form.html', form=form, title='Edit Designation', desig=desig)
+
+
+# ===========================================================================
+# LEAVE POLICY MANAGEMENT (UPGRADED — designation-linked)
+# ===========================================================================
+@bp.route('/leave-policies')
+@admin_required
+def leave_policies():
+    policies = LeavePolicy.query.order_by(LeavePolicy.leave_type, LeavePolicy.designation_id).all()
+    return render_template('admin/leave_policies.html', policies=policies)
+
+
+@bp.route('/leave-policies/add', methods=['GET', 'POST'])
+@admin_required
+def add_leave_policy():
+    form = LeavePolicyForm()
+    form.designation_id.choices = [(0, '— Global (All Roles) —')] + [
+        (d.id, f'{d.title} ({d.department.name})') for d in
+        Designation.query.filter_by(is_active=True).order_by(Designation.title)
+    ]
+    if form.validate_on_submit():
+        desig_id = form.designation_id.data if form.designation_id.data != 0 else None
+        # Check uniqueness: same leave_type + designation combo
+        existing = LeavePolicy.query.filter_by(
+            leave_type=form.leave_type.data, designation_id=desig_id
+        ).first()
+        if existing:
+            flash(f'Leave policy "{form.leave_type.data}" already exists for this designation.', 'danger')
+            return render_template('admin/leave_policy_form.html', form=form, title='Add Leave Policy')
+        policy = LeavePolicy(
+            leave_type=form.leave_type.data,
+            designation_id=desig_id,
+            total_days=form.total_days.data,
+            carry_forward=form.carry_forward.data,
+            max_carry_days=form.max_carry_days.data or 0,
+            monthly_accrual=form.monthly_accrual.data,
+            encashment_allowed=form.encashment_allowed.data,
+            max_per_request=form.max_per_request.data if form.max_per_request.data else None,
+            blackout_dates=form.blackout_dates.data or '',
+            description=form.description.data or '',
+            is_active=form.is_active.data
+        )
+        db.session.add(policy)
+        from flask_login import current_user
+        log_audit(current_user.id, 'CREATE', 'LeavePolicy', None, f'Created policy {policy.leave_type}')
+        db.session.commit()
+        flash(f'Leave policy "{policy.leave_type}" created.', 'success')
+        return redirect(url_for('admin.leave_policies'))
+    return render_template('admin/leave_policy_form.html', form=form, title='Add Leave Policy')
+
+
+@bp.route('/leave-policies/<int:policy_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_leave_policy(policy_id):
+    policy = LeavePolicy.query.get_or_404(policy_id)
+    form = LeavePolicyForm(obj=policy)
+    form.designation_id.choices = [(0, '— Global (All Roles) —')] + [
+        (d.id, f'{d.title} ({d.department.name})') for d in
+        Designation.query.filter_by(is_active=True).order_by(Designation.title)
+    ]
+    if request.method == 'GET':
+        form.designation_id.data = policy.designation_id or 0
+    if form.validate_on_submit():
+        desig_id = form.designation_id.data if form.designation_id.data != 0 else None
+        policy.leave_type = form.leave_type.data
+        policy.designation_id = desig_id
+        policy.total_days = form.total_days.data
+        policy.carry_forward = form.carry_forward.data
+        policy.max_carry_days = form.max_carry_days.data or 0
+        policy.monthly_accrual = form.monthly_accrual.data
+        policy.encashment_allowed = form.encashment_allowed.data
+        policy.max_per_request = form.max_per_request.data if form.max_per_request.data else None
+        policy.blackout_dates = form.blackout_dates.data or ''
+        policy.description = form.description.data or ''
+        policy.is_active = form.is_active.data
+        from flask_login import current_user
+        log_audit(current_user.id, 'UPDATE', 'LeavePolicy', policy.id, f'Updated policy {policy.leave_type}')
+        db.session.commit()
+        flash(f'Leave policy "{policy.leave_type}" updated.', 'success')
+        return redirect(url_for('admin.leave_policies'))
+    return render_template('admin/leave_policy_form.html', form=form, title='Edit Leave Policy', policy=policy)
+
+
+# ===========================================================================
+# ATTENDANCE RULES (single config — acts as General Shift)
+# ===========================================================================
+@bp.route('/attendance-rules', methods=['GET', 'POST'])
+@admin_required
+def attendance_rules():
+    rule = AttendanceRule.query.first()
+    if not rule:
+        rule = AttendanceRule()
+        db.session.add(rule)
+        db.session.commit()
+    form = AttendanceRuleForm(obj=rule)
+    if form.validate_on_submit():
+        rule.work_start = form.work_start.data
+        rule.work_end = form.work_end.data
+        rule.late_threshold_mins = form.late_threshold_mins.data
+        rule.half_day_hours = form.half_day_hours.data
+        rule.full_day_hours = form.full_day_hours.data
+        from flask_login import current_user
+        log_audit(current_user.id, 'UPDATE', 'AttendanceRule', rule.id, 'Updated attendance rules')
+        db.session.commit()
+        flash('Attendance rules updated.', 'success')
+        return redirect(url_for('admin.attendance_rules'))
+    return render_template('admin/attendance_rules.html', form=form, rule=rule)
+
+
+# ===========================================================================
+# SHIFT MANAGEMENT (NEW)
+# ===========================================================================
+@bp.route('/shifts')
+@admin_required
+def shifts():
+    all_shifts = Shift.query.order_by(Shift.shift_name).all()
+    return render_template('admin/shifts.html', shifts=all_shifts)
+
+
+@bp.route('/shifts/add', methods=['GET', 'POST'])
+@admin_required
+def add_shift():
+    form = ShiftForm()
+    if form.validate_on_submit():
+        if Shift.query.filter_by(shift_name=form.shift_name.data).first():
+            flash('Shift name already exists.', 'danger')
+            return render_template('admin/shift_form.html', form=form, title='Add Shift')
+        shift = Shift(
+            shift_name=form.shift_name.data,
+            start_time=form.start_time.data,
+            end_time=form.end_time.data,
+            grace_period_mins=form.grace_period_mins.data,
+            min_working_hours=form.min_working_hours.data,
+            late_mark_after_mins=form.late_mark_after_mins.data,
+            overtime_eligible=form.overtime_eligible.data,
+            is_active=form.is_active.data
+        )
+        db.session.add(shift)
+        from flask_login import current_user
+        log_audit(current_user.id, 'CREATE', 'Shift', None, f'Created shift {shift.shift_name}')
+        db.session.commit()
+        flash(f'Shift "{shift.shift_name}" created.', 'success')
+        return redirect(url_for('admin.shifts'))
+    return render_template('admin/shift_form.html', form=form, title='Add Shift')
+
+
+@bp.route('/shifts/<int:shift_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_shift(shift_id):
+    shift = Shift.query.get_or_404(shift_id)
+    form = ShiftForm(obj=shift)
+    if form.validate_on_submit():
+        existing = Shift.query.filter(Shift.shift_name == form.shift_name.data, Shift.id != shift.id).first()
+        if existing:
+            flash('Shift name already taken.', 'danger')
+            return render_template('admin/shift_form.html', form=form, title='Edit Shift', shift=shift)
+        shift.shift_name = form.shift_name.data
+        shift.start_time = form.start_time.data
+        shift.end_time = form.end_time.data
+        shift.grace_period_mins = form.grace_period_mins.data
+        shift.min_working_hours = form.min_working_hours.data
+        shift.late_mark_after_mins = form.late_mark_after_mins.data
+        shift.overtime_eligible = form.overtime_eligible.data
+        shift.is_active = form.is_active.data
+        from flask_login import current_user
+        log_audit(current_user.id, 'UPDATE', 'Shift', shift.id, f'Updated shift {shift.shift_name}')
+        db.session.commit()
+        flash(f'Shift "{shift.shift_name}" updated.', 'success')
+        return redirect(url_for('admin.shifts'))
+    return render_template('admin/shift_form.html', form=form, title='Edit Shift', shift=shift)
+
+
+# ===========================================================================
+# AUDIT LOG VIEWER (NEW)
+# ===========================================================================
+@bp.route('/audit-logs')
+@admin_required
+def audit_logs():
+    page = request.args.get('page', 1, type=int)
+    logs = AuditLog.query.order_by(AuditLog.timestamp.desc()).paginate(page=page, per_page=25, error_out=False)
+    return render_template('admin/audit_logs.html', logs=logs)
+
+
+# ===========================================================================
+# DEPARTMENT SOFT DELETE — Deactivate / Restore
+# ===========================================================================
+@bp.route('/departments/<int:dept_id>/delete', methods=['POST'])
+@admin_required
+def delete_department(dept_id):
+    """Soft-delete a department (set is_active=False)."""
+    dept = Department.query.get_or_404(dept_id)
+    # Check if department has active employees
+    active_emps = Employee.query.filter_by(department_id=dept.id, is_active=True).count()
+    if active_emps > 0:
+        flash(f'Cannot deactivate "{dept.name}" — {active_emps} active employee(s) assigned.', 'danger')
+        return redirect(url_for('admin.departments'))
+
+    dept.is_active = False
+    from flask_login import current_user
+    log_audit(current_user.id, 'SOFT_DELETE', 'Department', dept.id,
+              f'Deactivated dept {dept.code}')
+    db.session.commit()
+    flash(f'Department "{dept.name}" deactivated.', 'warning')
+    return redirect(url_for('admin.departments'))
+
+
+@bp.route('/departments/<int:dept_id>/restore', methods=['POST'])
+@admin_required
+def restore_department(dept_id):
+    """Restore a soft-deleted department."""
+    dept = Department.query.get_or_404(dept_id)
+    dept.is_active = True
+    from flask_login import current_user
+    log_audit(current_user.id, 'RESTORE', 'Department', dept.id,
+              f'Restored dept {dept.code}')
+    db.session.commit()
+    flash(f'Department "{dept.name}" restored.', 'success')
+    return redirect(url_for('admin.departments'))
+
+
+# ===========================================================================
+# DESIGNATION SOFT DELETE — Deactivate / Restore
+# ===========================================================================
+@bp.route('/designations/<int:desig_id>/delete', methods=['POST'])
+@admin_required
+def delete_designation(desig_id):
+    """Soft-delete a designation (set is_active=False)."""
+    desig = Designation.query.get_or_404(desig_id)
+    active_emps = Employee.query.filter_by(designation_id=desig.id, is_active=True).count()
+    if active_emps > 0:
+        flash(f'Cannot deactivate "{desig.title}" — {active_emps} active employee(s) assigned.', 'danger')
+        return redirect(url_for('admin.designations'))
+
+    desig.is_active = False
+    from flask_login import current_user
+    log_audit(current_user.id, 'SOFT_DELETE', 'Designation', desig.id,
+              f'Deactivated designation {desig.title}')
+    db.session.commit()
+    flash(f'Designation "{desig.title}" deactivated.', 'warning')
+    return redirect(url_for('admin.designations'))
+
+
+@bp.route('/designations/<int:desig_id>/restore', methods=['POST'])
+@admin_required
+def restore_designation(desig_id):
+    """Restore a soft-deleted designation."""
+    desig = Designation.query.get_or_404(desig_id)
+    desig.is_active = True
+    from flask_login import current_user
+    log_audit(current_user.id, 'RESTORE', 'Designation', desig.id,
+              f'Restored designation {desig.title}')
+    db.session.commit()
+    flash(f'Designation "{desig.title}" restored.', 'success')
+    return redirect(url_for('admin.designations'))
+
+
+# ===========================================================================
+# LOGIN HISTORY / USER ACTIVITY (NEW)
+# ===========================================================================
+@bp.route('/login-history')
+@admin_required
+def login_history():
+    """View all login attempts across the system."""
+    user_filter = request.args.get('user', type=int)
+    status_filter = request.args.get('status', '')
+    page = request.args.get('page', 1, type=int)
+
+    query = LoginHistory.query
+    if user_filter:
+        query = query.filter_by(user_id=user_filter)
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+
+    records = query.order_by(LoginHistory.login_at.desc()).paginate(
+        page=page, per_page=30, error_out=False
+    )
+    users = User.query.order_by(User.full_name).all()
+    return render_template('admin/login_history.html', records=records,
+                           users=users, selected_user=user_filter,
+                           selected_status=status_filter)
+
+
+@bp.route('/users/<int:user_id>/unlock', methods=['POST'])
+@admin_required
+def unlock_user(user_id):
+    """Manually unlock a locked user account."""
+    user = User.query.get_or_404(user_id)
+    user.reset_failed_logins()
+    from flask_login import current_user
+    log_audit(current_user.id, 'UNLOCK', 'User', user.id,
+              f'Manually unlocked {user.username}')
+    db.session.commit()
+    flash(f'Account "{user.username}" has been unlocked.', 'success')
+    return redirect(url_for('admin.login_history'))
+
+
+# ===========================================================================
+# NOTIFICATION MANAGEMENT (NEW)
+# ===========================================================================
+@bp.route('/notifications')
+@admin_required
+def notifications():
+    """Admin notification management — view and send notifications."""
+    page = request.args.get('page', 1, type=int)
+    target = request.args.get('target', '')
+
+    query = Notification.query
+    if target:
+        query = query.filter_by(user_id=target)
+
+    notifs = query.order_by(Notification.created_at.desc()).paginate(
+        page=page, per_page=30, error_out=False
+    )
+    users = User.query.filter_by(is_active_user=True).order_by(User.full_name).all()
+    return render_template('admin/notifications.html', notifications=notifs,
+                           users=users, selected_target=target)
+
+
+@bp.route('/notifications/send', methods=['POST'])
+@admin_required
+def send_notification():
+    """Send a notification to one user or all users."""
+    target = request.form.get('target', '')
+    title = request.form.get('title', '').strip()
+    message = request.form.get('message', '').strip()
+    category = request.form.get('category', 'info')
+
+    if not title or not message:
+        flash('Title and message are required.', 'danger')
+        return redirect(url_for('admin.notifications'))
+
+    from flask_login import current_user
+    count = 0
+    if target == 'all':
+        users = User.query.filter_by(is_active_user=True).all()
+        for u in users:
+            n = Notification(user_id=u.id, title=title, message=message, category=category)
+            db.session.add(n)
+            count += 1
+    elif target:
+        n = Notification(user_id=int(target), title=title, message=message, category=category)
+        db.session.add(n)
+        count = 1
+    else:
+        flash('Please select a target recipient.', 'danger')
+        return redirect(url_for('admin.notifications'))
+
+    log_audit(current_user.id, 'SEND', 'Notification', None,
+              f'Sent "{title}" to {count} user(s)')
+    db.session.commit()
+    flash(f'Notification sent to {count} user(s).', 'success')
+    return redirect(url_for('admin.notifications'))
+
+
+@bp.route('/notifications/<int:notif_id>/delete', methods=['POST'])
+@admin_required
+def delete_notification(notif_id):
+    """Delete a notification."""
+    notif = Notification.query.get_or_404(notif_id)
+    db.session.delete(notif)
+    db.session.commit()
+    flash('Notification deleted.', 'warning')
+    return redirect(url_for('admin.notifications'))
+
+
+# ===========================================================================
+# HOLIDAY CALENDAR MANAGEMENT (NEW)
+# ===========================================================================
+@bp.route('/holidays')
+@admin_required
+def holidays():
+    """View company holiday calendar."""
+    year = request.args.get('year', __import__('datetime').date.today().year, type=int)
+    query = Holiday.query.filter(
+        db.extract('year', Holiday.date) == year
+    ).order_by(Holiday.date)
+    all_holidays = query.all()
+    return render_template('admin/holidays.html', holidays=all_holidays, year=year)
+
+
+@bp.route('/holidays/add', methods=['GET', 'POST'])
+@admin_required
+def add_holiday():
+    """Add a company holiday."""
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        date_str = request.form.get('date', '').strip()
+        holiday_type = request.form.get('holiday_type', 'Public')
+        description = request.form.get('description', '').strip()
+
+        if not name or not date_str:
+            flash('Holiday name and date are required.', 'danger')
+            return render_template('admin/holiday_form.html', title='Add Holiday')
+
+        from datetime import datetime as dt
+        try:
+            h_date = dt.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Invalid date format.', 'danger')
+            return render_template('admin/holiday_form.html', title='Add Holiday')
+
+        existing = Holiday.query.filter_by(name=name, date=h_date).first()
+        if existing:
+            flash('A holiday with this name and date already exists.', 'danger')
+            return render_template('admin/holiday_form.html', title='Add Holiday')
+
+        from flask_login import current_user
+        holiday = Holiday(
+            name=name, date=h_date, holiday_type=holiday_type,
+            description=description, created_by=current_user.id
+        )
+        db.session.add(holiday)
+        log_audit(current_user.id, 'CREATE', 'Holiday', None,
+                  f'Added holiday: {name} on {h_date}')
+        db.session.commit()
+        flash(f'Holiday "{name}" added.', 'success')
+        return redirect(url_for('admin.holidays'))
+
+    return render_template('admin/holiday_form.html', title='Add Holiday')
+
+
+@bp.route('/holidays/<int:holiday_id>/edit', methods=['GET', 'POST'])
+@admin_required
+def edit_holiday(holiday_id):
+    """Edit a company holiday."""
+    holiday = Holiday.query.get_or_404(holiday_id)
+
+    if request.method == 'POST':
+        holiday.name = request.form.get('name', '').strip()
+        date_str = request.form.get('date', '').strip()
+        holiday.holiday_type = request.form.get('holiday_type', 'Public')
+        holiday.description = request.form.get('description', '').strip()
+
+        from datetime import datetime as dt
+        try:
+            holiday.date = dt.strptime(date_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Invalid date format.', 'danger')
+            return render_template('admin/holiday_form.html', title='Edit Holiday', holiday=holiday)
+
+        from flask_login import current_user
+        log_audit(current_user.id, 'UPDATE', 'Holiday', holiday.id,
+                  f'Updated holiday: {holiday.name}')
+        db.session.commit()
+        flash(f'Holiday "{holiday.name}" updated.', 'success')
+        return redirect(url_for('admin.holidays'))
+
+    return render_template('admin/holiday_form.html', title='Edit Holiday', holiday=holiday)
+
+
+@bp.route('/holidays/<int:holiday_id>/delete', methods=['POST'])
+@admin_required
+def delete_holiday(holiday_id):
+    """Delete a company holiday."""
+    holiday = Holiday.query.get_or_404(holiday_id)
+    from flask_login import current_user
+    log_audit(current_user.id, 'DELETE', 'Holiday', holiday.id,
+              f'Deleted holiday: {holiday.name} ({holiday.date})')
+    db.session.delete(holiday)
+    db.session.commit()
+    flash(f'Holiday "{holiday.name}" deleted.', 'warning')
+    return redirect(url_for('admin.holidays'))
+
+
+@bp.route('/holidays/upload', methods=['POST'])
+@admin_required
+def upload_holidays():
+    """Bulk upload holidays via Excel or CSV."""
+    import pandas as pd
+    from datetime import datetime
+
+    if 'file' not in request.files:
+        flash('No file uploaded.', 'danger')
+        return redirect(url_for('admin.holidays'))
+        
+    file = request.files['file']
+    if file.filename == '':
+        flash('No file selected.', 'danger')
+        return redirect(url_for('admin.holidays'))
+        
+    if not (file.filename.endswith('.csv') or file.filename.endswith('.xlsx')):
+        flash('Invalid file format. Please upload a .csv or .xlsx file.', 'danger')
+        return redirect(url_for('admin.holidays'))
+        
+    try:
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+            
+        # Standardize column names
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        
+        if 'holiday_name' not in df.columns or 'holiday_date' not in df.columns:
+            flash('Missing required columns: holiday_name, holiday_date', 'danger')
+            return redirect(url_for('admin.holidays'))
+            
+        added_count = 0
+        skipped_count = 0
+        from flask_login import current_user
+        
+        for index, row in df.iterrows():
+            name = str(row.get('holiday_name', '')).strip()
+            date_val = row.get('holiday_date')
+            
+            if not name or name == 'nan' or pd.isna(date_val):
+                continue
+                
+            # Parse date
+            try:
+                if isinstance(date_val, str):
+                    h_date = datetime.strptime(str(date_val).strip()[:10], '%Y-%m-%d').date()
+                else:
+                    h_date = date_val.date() if hasattr(date_val, 'date') else date_val
+            except Exception:
+                skipped_count += 1
+                continue
+                
+            h_type = str(row.get('holiday_type', 'Public')).strip()
+            if h_type not in ['Public', 'Restricted', 'Optional']:
+                h_type = 'Public'
+                
+            desc = str(row.get('description', '')).strip()
+            if desc == 'nan': 
+                desc = ''
+            
+            # Prevent duplicate holiday dates
+            existing = Holiday.query.filter_by(date=h_date).first()
+            if existing:
+                # Update existing if duplicate found (Bonus Feature)
+                existing.name = name
+                existing.holiday_type = h_type
+                existing.description = desc
+                added_count += 1
+                continue
+                
+            holiday = Holiday(
+                name=name,
+                date=h_date,
+                holiday_type=h_type,
+                description=desc,
+                created_by=current_user.id
+            )
+            db.session.add(holiday)
+            added_count += 1
+            
+        if added_count > 0:
+            log_audit(current_user.id, 'BULK_UPLOAD', 'Holiday', None, f'Bulk uploaded/updated {added_count} holidays')
+            db.session.commit()
+            flash(f'Upload complete: {added_count} holidays processed.', 'success')
+        else:
+            flash('No new valid holidays found to upload.', 'info')
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error processing file: {str(e)}', 'danger')
+        
+    return redirect(url_for('admin.holidays'))
+
+
+@bp.route('/holidays/template/download')
+@admin_required
+def download_holiday_template():
+    """Download CSV template for bulk holiday upload."""
+    import csv
+    import io
+    from flask import Response
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['holiday_name', 'holiday_date', 'holiday_day', 'holiday_type', 'description'])
+    writer.writerow(['New Year', '2026-01-01', 'Thursday', 'Public', 'New Year Day'])
+    writer.writerow(['Diwali', '2026-11-08', 'Sunday', 'Public', 'Festival of Lights'])
+    
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment;filename=holiday_template.csv"}
+    )
+
+# ===========================================================================
+# PM OVERVIEW (Admin as PM Lead)
+# ===========================================================================
+@bp.route('/pm-overview')
+@admin_required
+def pm_overview():
+    """Admin PM overview — all projects grouped by assigned PM."""
+    from datetime import date as date_cls
+    all_projects = Project.query.order_by(Project.assigned_pm, Project.created_at.desc()).all()
+
+    # Group projects by PM
+    pm_groups = {}  # pm_user -> [projects]
+    unassigned = []
+    for p in all_projects:
+        if p.assigned_pm:
+            pm_user = User.query.get(p.assigned_pm)
+            if pm_user not in pm_groups:
+                pm_groups[pm_user] = []
+            pm_groups[pm_user].append(p)
+        else:
+            unassigned.append(p)
+
+    # Build stats per PM
+    pm_stats = []
+    for pm_user, projects in pm_groups.items():
+        total_tasks = sum(p.tasks.count() for p in projects)
+        pending = sum(p.tasks.filter_by(status='Pending').count() for p in projects)
+        in_progress = sum(p.tasks.filter_by(status='In Progress').count() for p in projects)
+        done = sum(p.tasks.filter_by(status='Done').count() for p in projects)
+        overdue = sum(p.tasks.filter(Task.due_date < db.func.current_date(), Task.status != 'Done').count() for p in projects)
+        team_count = len(set(
+            m.user_id for p in projects for m in p.members
+        ))
+        pm_stats.append({
+            'pm': pm_user,
+            'projects': projects,
+            'total_tasks': total_tasks,
+            'pending': pending,
+            'in_progress': in_progress,
+            'done': done,
+            'overdue': overdue,
+            'team_count': team_count,
+        })
+
+    # Summary stats
+    total = len(all_projects)
+    active = sum(1 for p in all_projects if p.status == 'In Progress')
+    completed = sum(1 for p in all_projects if p.status == 'Completed')
+    delayed = sum(1 for p in all_projects if p.is_delayed)
+
+    return render_template('admin/pm_overview.html',
+                           pm_stats=pm_stats,
+                           unassigned_projects=unassigned,
+                           total_projects=total,
+                           active_projects=active,
+                           completed_projects=completed,
+                           delayed_projects=delayed)
+
+
+# ===========================================================================
+# TIMESHEET MANAGEMENT (Admin Override)
+# ===========================================================================
+@bp.route('/timesheets')
+@admin_required
+def timesheets():
+    """Global timesheet report — all entries, all projects."""
+    status_filter = request.args.get('status', '')
+    project_filter = request.args.get('project', type=int)
+    employee_filter = request.args.get('employee', type=int)
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+
+    query = Timesheet.query
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if project_filter:
+        query = query.filter_by(project_id=project_filter)
+    if employee_filter:
+        query = query.filter_by(employee_id=employee_filter)
+    if date_from:
+        try:
+            from datetime import datetime
+            query = query.filter(Timesheet.date >= datetime.strptime(date_from, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            from datetime import datetime
+            query = query.filter(Timesheet.date <= datetime.strptime(date_to, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    page = request.args.get('page', 1, type=int)
+    records = query.order_by(Timesheet.date.desc()).paginate(page=page, per_page=25, error_out=False)
+    projects = Project.query.order_by(Project.name).all()
+    employees = Employee.query.order_by(Employee.emp_code).all()
+
+    # For total hours, we need the full query without pagination
+    # To keep it efficient, we use scalar aggregation
+    total_hours = db.session.query(db.func.coalesce(db.func.sum(Timesheet.hours_worked), 0)).filter(query.whereclause).scalar() if query.whereclause is not None else db.session.query(db.func.coalesce(db.func.sum(Timesheet.hours_worked), 0)).scalar()
+    approved_hours = db.session.query(db.func.coalesce(db.func.sum(Timesheet.hours_worked), 0)).filter(query.whereclause, Timesheet.status == 'Approved').scalar() if query.whereclause is not None else db.session.query(db.func.coalesce(db.func.sum(Timesheet.hours_worked), 0)).filter(Timesheet.status == 'Approved').scalar()
+
+    return render_template('admin/timesheets.html', records=records,
+                           projects=projects, employees=employees,
+                           selected_status=status_filter,
+                           selected_project=project_filter,
+                           selected_employee=employee_filter,
+                           date_from=date_from, date_to=date_to,
+                           total_hours=total_hours,
+                           approved_hours=approved_hours)
+
+
+@bp.route('/timesheets/<int:ts_id>/force-approve', methods=['POST'])
+@admin_required
+def force_approve_timesheet(ts_id):
+    """Admin overrides: force-approve a timesheet."""
+    from datetime import datetime
+    ts = Timesheet.query.get_or_404(ts_id)
+
+    if ts.status == 'Approved':
+        flash('Timesheet is already approved.', 'warning')
+        return redirect(url_for('admin.timesheets'))
+
+    old_status = ts.status
+    ts.status = 'Approved'
+    ts.approved_by = session.get('user_id') or 1
+    ts.approved_at = datetime.utcnow()
+
+    # Auto-sync task hours
+    if ts.task_id:
+        task = Task.query.get(ts.task_id)
+        if task:
+            task.actual_hours = (task.actual_hours or 0) + ts.hours_worked
+
+    from flask_login import current_user
+    log_audit(current_user.id, 'FORCE_APPROVE', 'Timesheet', ts.id,
+              f'Admin force-approved (was {old_status}): {ts.hours_worked}h emp#{ts.employee_id}')
+
+    # Notify employee and PM
+    notif = Notification(user_id=ts.employee.user_id,
+                        title='Timesheet Force-Approved',
+                        message=f'Admin force-approved your timesheet for {ts.date.strftime("%d %b %Y")} ({ts.hours_worked}h).',
+                        category='success', link='/employee/timesheets')
+    db.session.add(notif)
+    if ts.project.assigned_pm:
+        pm_notif = Notification(user_id=ts.project.assigned_pm,
+                               title='Admin Override: Timesheet Approved',
+                               message=f'Admin force-approved timesheet #{ts.id} for {ts.employee_name}.',
+                               category='info', link='/pm/timesheet-approvals')
+        db.session.add(pm_notif)
+
+    db.session.commit()
+    flash(f'Timesheet #{ts.id} force-approved by Admin.', 'success')
+    return redirect(url_for('admin.timesheets'))
+
+
+@bp.route('/timesheets/<int:ts_id>/force-reject', methods=['POST'])
+@admin_required
+def force_reject_timesheet(ts_id):
+    """Admin overrides: force-reject a timesheet."""
+    ts = Timesheet.query.get_or_404(ts_id)
+    reason = request.form.get('rejection_reason', 'Admin override').strip()
+
+    old_status = ts.status
+
+    # If it was previously Approved, reverse the hour sync
+    if old_status == 'Approved' and ts.task_id:
+        task = Task.query.get(ts.task_id)
+        if task:
+            task.actual_hours = max(0, (task.actual_hours or 0) - ts.hours_worked)
+
+    ts.status = 'Rejected'
+    ts.rejection_reason = reason
+
+    from flask_login import current_user
+    log_audit(current_user.id, 'FORCE_REJECT', 'Timesheet', ts.id,
+              f'Admin force-rejected (was {old_status}): {reason}')
+
+    notif = Notification(user_id=ts.employee.user_id,
+                        title='Timesheet Force-Rejected',
+                        message=f'Admin rejected your timesheet for {ts.date.strftime("%d %b %Y")}: {reason}',
+                        category='danger', link='/employee/timesheets')
+    db.session.add(notif)
+
+    db.session.commit()
+    flash(f'Timesheet #{ts.id} force-rejected.', 'warning')
+    return redirect(url_for('admin.timesheets'))
+
+
+@bp.route('/timesheets/export')
+@admin_required
+def export_timesheets():
+    """Export timesheets as CSV or Excel."""
+    import csv
+    import io
+    from flask import Response
+
+    fmt = request.args.get('format', 'csv')  # csv or xlsx
+    status_filter = request.args.get('status', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+
+    query = Timesheet.query
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if date_from:
+        try:
+            from datetime import datetime
+            query = query.filter(Timesheet.date >= datetime.strptime(date_from, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            from datetime import datetime
+            query = query.filter(Timesheet.date <= datetime.strptime(date_to, '%Y-%m-%d').date())
+        except ValueError:
+            pass
+
+    records = query.order_by(Timesheet.date.desc()).all()
+
+    headers = ['ID', 'Employee Code', 'Employee Name', 'Date', 'Project',
+               'Task', 'Hours', 'Description', 'Status', 'Approved By', 'Approved At']
+
+    rows = []
+    for r in records:
+        rows.append([
+            r.id,
+            r.employee.emp_code,
+            r.employee_name,
+            r.date.strftime('%Y-%m-%d'),
+            r.project_name,
+            r.task_title,
+            r.hours_worked,
+            r.description,
+            r.status,
+            r.approver.full_name if r.approver else '',
+            r.approved_at.strftime('%Y-%m-%d %H:%M') if r.approved_at else ''
+        ])
+
+    if fmt == 'xlsx':
+        try:
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = 'Timesheets'
+            ws.append(headers)
+            for row in rows:
+                ws.append(row)
+            # Style header
+            for cell in ws[1]:
+                cell.font = openpyxl.styles.Font(bold=True)
+            output = io.BytesIO()
+            wb.save(output)
+            output.seek(0)
+            return Response(
+                output.getvalue(),
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                headers={'Content-Disposition': 'attachment; filename=timesheets_export.xlsx'}
+            )
+        except ImportError:
+            flash('Excel export requires openpyxl. Falling back to CSV.', 'warning')
+            # Fall through to CSV
+
+    # CSV export
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(headers)
+    writer.writerows(rows)
+
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': 'attachment; filename=timesheets_export.csv'}
+    )
+
+
+# ===========================================================================
+# ORGANIZATION ANALYTICS
+# ===========================================================================
+@bp.route('/analytics')
+@admin_required
+def analytics():
+    """Organization-wide analytics — all projects, employees, hours."""
+    from collections import defaultdict
+    from datetime import date as date_cls, timedelta
+
+    all_projects = Project.query.all()
+    all_tasks = Task.query.all()
+    all_employees = Employee.query.all()
+
+    # --- Project Status ---
+    status_counts = defaultdict(int)
+    status_details = defaultdict(list)
+    for p in all_projects:
+        status_counts[p.status] += 1
+        status_details[p.status].append({'id': p.id, 'name': p.name})
+    project_status_data = {
+        'labels': ['Not Started', 'In Progress', 'Completed', 'On Hold'],
+        'values': [status_counts.get('Not Started', 0), status_counts.get('In Progress', 0),
+                   status_counts.get('Completed', 0), status_counts.get('On Hold', 0)],
+        'details': [status_details.get('Not Started', []), status_details.get('In Progress', []),
+                    status_details.get('Completed', []), status_details.get('On Hold', [])]
+    }
+
+    # --- Task Status & Priority ---
+    task_sc = defaultdict(int)
+    task_sc_details = defaultdict(list)
+    priority_c = defaultdict(int)
+    priority_c_details = defaultdict(list)
+    for t in all_tasks:
+        task_sc[t.status] += 1
+        task_sc_details[t.status].append({'id': t.project_id, 'name': t.title})
+        priority_c[t.priority] += 1
+        priority_c_details[t.priority].append({'id': t.project_id, 'name': t.title})
+        
+    task_status_data = {
+        'labels': ['Pending', 'In Progress', 'Done'],
+        'values': [task_sc.get('Pending', 0), task_sc.get('In Progress', 0), task_sc.get('Done', 0)],
+        'details': [task_sc_details.get('Pending', []), task_sc_details.get('In Progress', []), task_sc_details.get('Done', [])]
+    }
+    priority_data = {
+        'labels': ['Low', 'Medium', 'High', 'Critical'],
+        'values': [priority_c.get('Low', 0), priority_c.get('Medium', 0),
+                   priority_c.get('High', 0), priority_c.get('Critical', 0)],
+        'details': [priority_c_details.get('Low', []), priority_c_details.get('Medium', []),
+                    priority_c_details.get('High', []), priority_c_details.get('Critical', [])]
+    }
+
+    # --- Hours Comparison per Project ---
+    hours_comp = {'labels': [], 'estimated': [], 'actual': []}
+    for p in all_projects:
+        approved_h = db.session.query(
+            db.func.coalesce(db.func.sum(Timesheet.hours_worked), 0)
+        ).filter_by(project_id=p.id, status='Approved').scalar()
+        hours_comp['labels'].append(p.name[:25])
+        hours_comp['estimated'].append(round(p.estimated_hours or 0, 1))
+        hours_comp['actual'].append(round(float(approved_h), 1))
+
+    # --- Employee Workload (top 15 by task count) ---
+    emp_workload = defaultdict(lambda: {'pending': 0, 'in_progress': 0, 'done': 0})
+    for t in all_tasks:
+        if t.assigned_to:
+            u = User.query.get(t.assigned_to)
+            if u:
+                if t.status == 'Pending':
+                    emp_workload[u.full_name]['pending'] += 1
+                elif t.status == 'In Progress':
+                    emp_workload[u.full_name]['in_progress'] += 1
+                elif t.status == 'Done':
+                    emp_workload[u.full_name]['done'] += 1
+    # Sort by total tasks, take top 15
+    sorted_emp = sorted(emp_workload.keys(),
+                        key=lambda n: sum(emp_workload[n].values()), reverse=True)[:15]
+    employee_workload_data = {
+        'labels': sorted_emp,
+        'pending': [emp_workload[n]['pending'] for n in sorted_emp],
+        'in_progress': [emp_workload[n]['in_progress'] for n in sorted_emp],
+        'done': [emp_workload[n]['done'] for n in sorted_emp],
+    }
+
+    # --- Employee Hours (top 15) ---
+    emp_hours = defaultdict(float)
+    approved_ts = Timesheet.query.filter_by(status='Approved').all()
+    for ts in approved_ts:
+        emp_hours[ts.employee_name] += ts.hours_worked
+    sorted_by_hours = sorted(emp_hours.keys(), key=lambda n: emp_hours[n], reverse=True)[:15]
+    employee_hours_data = {
+        'labels': sorted_by_hours,
+        'values': [round(emp_hours[n], 1) for n in sorted_by_hours]
+    }
+
+    # --- Project Progress ---
+    progress_data = {
+        'labels': [p.name[:25] for p in all_projects],
+        'values': [p.progress for p in all_projects]
+    }
+
+    # --- Department Distribution ---
+    from app.models import Department
+    departments = Department.query.filter_by(is_active=True).all()
+    dept_data = {'labels': [], 'values': []}
+    for d in departments:
+        count = d.employees.count()
+        if count > 0:
+            dept_data['labels'].append(d.name)
+            dept_data['values'].append(count)
+
+    # --- Daily Trend (last 30 days) ---
+    today = date_cls.today()
+    thirty_ago = today - timedelta(days=30)
+    daily_map = defaultdict(float)
+    recent_ts = Timesheet.query.filter(
+        Timesheet.date >= thirty_ago,
+        Timesheet.status.in_(['Approved', 'Pending'])
+    ).all()
+    for ts in recent_ts:
+        daily_map[ts.date.strftime('%d %b')] += ts.hours_worked
+    date_labels = []
+    date_values = []
+    for i in range(30, -1, -1):
+        d = today - timedelta(days=i)
+        lbl = d.strftime('%d %b')
+        date_labels.append(lbl)
+        date_values.append(round(daily_map.get(lbl, 0), 1))
+    daily_trend_data = {'labels': date_labels, 'values': date_values}
+
+    # Total hours
+    total_hours = round(sum(emp_hours.values()), 1)
+    stats = {
+        'total_projects': len(all_projects),
+        'total_employees': len(all_employees),
+        'total_hours': total_hours
+    }
+
+    return render_template('admin/analytics.html',
+                           stats=stats,
+                           project_status_data=project_status_data,
+                           task_status_data=task_status_data,
+                           priority_data=priority_data,
+                           hours_comparison_data=hours_comp,
+                           employee_workload_data=employee_workload_data,
+                           employee_hours_data=employee_hours_data,
+                           progress_data=progress_data,
+                           dept_distribution_data=dept_data,
+                           daily_trend_data=daily_trend_data)
+
