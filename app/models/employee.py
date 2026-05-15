@@ -167,16 +167,20 @@ class LeaveBalance(db.Model):
     leave_type = db.Column(db.String(50), nullable=False)
     total_allocated = db.Column(db.Float, default=0)
     used = db.Column(db.Float, default=0)
+    carried_forward = db.Column(db.Float, default=0)       # Days carried from previous cycle
     year = db.Column(db.Integer, nullable=False)
+    cycle_start = db.Column(db.Date, nullable=True)          # Start of leave cycle period
+    cycle_end = db.Column(db.Date, nullable=True)            # End of leave cycle period
 
     __table_args__ = (db.UniqueConstraint('employee_id', 'leave_type', 'year', name='uq_emp_leave_year'),)
 
     @property
     def remaining(self):
-        return max(0, self.total_allocated - self.used)
+        return max(0, self.total_allocated + self.carried_forward - self.used)
 
     def __repr__(self):
         return f'<LeaveBalance {self.leave_type}: {self.remaining} left>'
+
 
 
 # ---------------------------------------------------------------------------

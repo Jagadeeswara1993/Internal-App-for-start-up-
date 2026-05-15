@@ -9,6 +9,21 @@
     </a>
 </div>
 
+<!-- Leave Cycle Info Banner -->
+{% if cycle_info %}
+<div style="background:linear-gradient(135deg,#312e81,#4338ca); border-radius:14px; padding:16px 22px; margin-bottom:20px; color:#fff;">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <div style="width:36px; height:36px; background:rgba(255,255,255,0.15); border-radius:8px; display:flex; align-items:center; justify-content:center;">
+            <i class="fas fa-calendar-alt"></i>
+        </div>
+        <div>
+            <div style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.04em; opacity:0.7;">Current Leave Cycle</div>
+            <div class="fw-bold">{{ cycle_info.type_label }} &nbsp;·&nbsp; {{ cycle_info.start }} → {{ cycle_info.end }}</div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row g-4">
     {% for bal in balances %}
     <div class="col-md-6 col-lg-4">
@@ -21,22 +36,38 @@
                     </span>
                 </div>
                 <div class="progress mb-3" style="height:8px;">
-                    {% set pct = ((bal.remaining / bal.total_allocated) * 100) if bal.total_allocated > 0 else 0 %}
+                    {% set total_pool = bal.total_allocated + bal.carried_forward %}
+                    {% set pct = ((bal.remaining / total_pool) * 100) if total_pool > 0 else 0 %}
                     <div class="progress-bar bg-{% if pct > 50 %}success{% elif pct > 20 %}warning{% else %}danger{% endif %}" style="width:{{ pct }}%"></div>
                 </div>
                 <div class="row g-2" style="font-size:0.85rem;">
-                    <div class="col-4 text-center">
+                    <div class="col-3 text-center">
                         <div class="fw-bold" style="color:var(--primary);">{{ bal.total_allocated | round(1) }}</div>
-                        <div style="color:var(--text-secondary); font-size:0.75rem;">Allocated</div>
+                        <div style="color:var(--text-secondary); font-size:0.72rem;">Allocated</div>
                     </div>
+                    {% if bal.carried_forward and bal.carried_forward > 0 %}
+                    <div class="col-3 text-center">
+                        <div class="fw-bold" style="color:#8b5cf6;">+{{ bal.carried_forward | round(1) }}</div>
+                        <div style="color:var(--text-secondary); font-size:0.72rem;">Carried</div>
+                    </div>
+                    <div class="col-3 text-center">
+                        <div class="fw-bold" style="color:var(--danger);">{{ bal.used | round(1) }}</div>
+                        <div style="color:var(--text-secondary); font-size:0.72rem;">Used</div>
+                    </div>
+                    <div class="col-3 text-center">
+                        <div class="fw-bold" style="color:var(--success);">{{ bal.remaining | round(1) }}</div>
+                        <div style="color:var(--text-secondary); font-size:0.72rem;">Available</div>
+                    </div>
+                    {% else %}
                     <div class="col-4 text-center">
                         <div class="fw-bold" style="color:var(--danger);">{{ bal.used | round(1) }}</div>
-                        <div style="color:var(--text-secondary); font-size:0.75rem;">Used</div>
+                        <div style="color:var(--text-secondary); font-size:0.72rem;">Used</div>
                     </div>
-                    <div class="col-4 text-center">
+                    <div class="col-5 text-center">
                         <div class="fw-bold" style="color:var(--success);">{{ bal.remaining | round(1) }}</div>
-                        <div style="color:var(--text-secondary); font-size:0.75rem;">Available</div>
+                        <div style="color:var(--text-secondary); font-size:0.72rem;">Available</div>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -58,7 +89,7 @@
     <div class="card-header"><h5><i class="fas fa-info-circle me-2"></i>Leave Policies</h5></div>
     <div class="table-responsive">
         <table class="table">
-            <thead><tr><th>Leave Type</th><th>Days/Year</th><th>Counting</th><th>Carry Forward</th><th>Description</th></tr></thead>
+            <thead><tr><th>Leave Type</th><th>Days/Year</th><th>Counting</th><th>Proration</th><th>Carry Forward</th><th>Description</th></tr></thead>
             <tbody>
                 {% for policy in policies %}
                 <tr>
@@ -69,6 +100,13 @@
                         <span class="badge" style="background:#0ea5e9; color:#fff; font-size:0.72rem;"><i class="fas fa-calendar me-1"></i>Calendar</span>
                         {% else %}
                         <span class="badge" style="background:#64748b; color:#fff; font-size:0.72rem;"><i class="fas fa-briefcase me-1"></i>Working</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if policy.is_prorated %}
+                        <span class="badge" style="background:#16a34a; color:#fff; font-size:0.72rem;"><i class="fas fa-chart-line me-1"></i>Pro-rated</span>
+                        {% else %}
+                        <span class="badge" style="background:#94a3b8; color:#fff; font-size:0.72rem;">Full</span>
                         {% endif %}
                     </td>
                     <td>{% if policy.carry_forward %}<span class="badge-status badge-approved">Yes (max {{ policy.max_carry_days }})</span>{% else %}<span class="badge-status badge-rejected">No</span>{% endif %}</td>

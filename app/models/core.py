@@ -263,3 +263,35 @@ class Holiday(db.Model):
         return f'<Holiday {self.holiday_name} on {self.holiday_date}>'
 
 
+# ===========================================================================
+# COMPANY SETTINGS — Singleton configuration (leave cycle, etc.)
+# ===========================================================================
+class CompanySettings(db.Model):
+    __tablename__ = 'company_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # Leave cycle: 'calendar' (Jan–Dec), 'financial' (Apr–Mar), 'custom'
+    leave_cycle_type = db.Column(db.String(20), default='financial', nullable=False)
+    # For 'custom' cycle — month (1-12) and day (1-31) when cycle starts
+    custom_cycle_start_month = db.Column(db.Integer, default=4)   # April
+    custom_cycle_start_day = db.Column(db.Integer, default=1)
+    # Rounding rule for proration: 'round' (nearest int) or 'decimal' (keep 1 decimal)
+    proration_rounding = db.Column(db.String(10), default='round')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @staticmethod
+    def get_settings():
+        """Get the singleton settings row, creating default if missing."""
+        settings = CompanySettings.query.first()
+        if not settings:
+            settings = CompanySettings(leave_cycle_type='financial',
+                                       custom_cycle_start_month=4,
+                                       custom_cycle_start_day=1,
+                                       proration_rounding='round')
+            db.session.add(settings)
+            db.session.flush()
+        return settings
+
+    def __repr__(self):
+        return f'<CompanySettings cycle={self.leave_cycle_type}>'
+

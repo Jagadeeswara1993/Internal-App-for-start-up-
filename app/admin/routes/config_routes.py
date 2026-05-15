@@ -7,9 +7,10 @@ from app.admin import bp
 from app.decorators import admin_required
 from app.extensions import db
 from app.models import (Employee, Department, Designation, LeavePolicy,
-                        AttendanceRule, Shift, AuditLog, Holiday)
+                        AttendanceRule, Shift, AuditLog, Holiday, CompanySettings)
 from app.admin.config_forms import (DepartmentForm, DesignationForm,
-                                     LeavePolicyForm, AttendanceRuleForm, ShiftForm)
+                                     LeavePolicyForm, AttendanceRuleForm, ShiftForm,
+                                     LeaveCycleForm)
 
 
 from app.utils.audit import log_audit
@@ -551,3 +552,43 @@ def download_holiday_template():
         mimetype="text/csv",
         headers={"Content-Disposition": "attachment;filename=holiday_template.csv"}
     )
+
+# ===========================================================================
+# LEAVE CYCLE SETTINGS
+# ===========================================================================
+@bp.route('/leave-cycle-settings', methods=['GET', 'POST'])
+@admin_required
+def leave_cycle_settings():
+    """Configure the company leave cycle type and proration rules."""
+    settings = CompanySettings.get_settings()
+    form = LeaveCycleForm(obj=settings)
+    if form.validate_on_submit():
+        settings.leave_cycle_type = form.leave_cycle_type.data
+        settings.custom_cycle_start_month = form.custom_cycle_start_month.data
+        settings.custom_cycle_start_day = form.custom_cycle_start_day.data
+        settings.proration_rounding = form.proration_rounding.data
+        log_audit(current_user.id, 'UPDATE', 'CompanySettings', settings.id,
+                  f'Updated leave cycle to {settings.leave_cycle_type}')
+        db.session.commit()
+        flash('Leave cycle settings updated.', 'success')
+        return redirect(url_for('admin.leave_cycle_settings'))
+
+    # Compute current cycle for display
+    from app.hr.services import get_leave_cycle_dates
+    cycle_start, cycle_end = get_leave_cycle_dates()
+    return render_template('admin/leave_cycle_settings.html', form=form,
+                           settings=settings, cycle_start=cycle_start,
+                           cycle_end=cycle_end)
+
+
+@bp.route('/leave-cycle/rollover', methods=['POST'])
+@admin_required
+def trigger_leave_rollover():
+    """Manually trigger yearly leave rollover for all employees."""
+    from app.hr.services import run_yearly_leave_rollover
+    processed, skipped = run_yearly_leave_rollover()
+    log_audit(current_user.id, 'ROLLOVER', 'LeaveBalance', None,
+              f'Yearly rollover: {processed} employees processed, {skipped} already done')
+    db.session.commit()
+    flash(f'Leave rollover complete: {processed} employees processed, {skipped} already up-to-date.', 'success')
+    return redirect(url_for('admin.leave_cycle_settings'))

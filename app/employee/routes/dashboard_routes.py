@@ -13,47 +13,64 @@ from app.models import (Employee, Attendance, Leave, Notification,
 @bp.route('/')
 @module_required('employee')
 def dashboard():
-    emp = Employee.query.filter_by(user_id=current_user.id).first_or_404()
+    from app.employee import services
+    from app.hr import services as hr_services
 
-    today = date.today()
-    today_att = Attendance.query.filter_by(employee_id=emp.id, date=today).first()
-    pending_leaves = Leave.query.filter_by(employee_id=emp.id, status='Pending').count()
-    approved_leaves = Leave.query.filter_by(employee_id=emp.id, status='Approved').count()
-    unread_notifications = Notification.query.filter_by(
-        user_id=current_user.id, is_read=False
-    ).count()
-    recent_reviews = PerformanceReview.query.filter_by(employee_id=emp.id)\
-        .order_by(PerformanceReview.created_at.desc()).limit(3).all()
+    employee = Employee.query.filter_by(user_id=current_user.id).first_or_404()
 
-    recent_attendance = Attendance.query.filter_by(employee_id=emp.id)\
-        .order_by(Attendance.date.desc()).limit(5).all()
+    today_att = None
+    leave_balances = []
+    pending_leaves = 0
+    att_summary = {}
+    profile_complete = False
+    shift_rules = None
+    comp_off_count = 0
 
-    # Timesheet stats
-    pending_timesheets = Timesheet.query.filter_by(employee_id=emp.id, status='Pending').count()
-    approved_ts_hours = db.session.query(
-        db.func.coalesce(db.func.sum(Timesheet.hours_worked), 0)
-    ).filter_by(employee_id=emp.id, status='Approved').scalar()
+    if employee:
+        profile_complete = hr_services.is_employee_profile_complete(employee)
+        today_att = services.get_today_attendance(employee.id)
+        leave_balances = services.get_my_leave_balances(employee.id)
+        pending_leaves = len(services.get_my_leaves(employee.id, status='Pending'))
+        att_summary = services.get_my_attendance_summary(employee.id)
+        shift_rules = services.get_my_shift_rules(employee.id)
+        comp_off_count = len([c for c in services.get_my_comp_offs(employee.id) if c.status == 'Earned'])
 
-    # Task stats
-    my_tasks = Task.query.filter_by(assigned_to=current_user.id).all()
-    tasks_pending = sum(1 for t in my_tasks if t.status == 'Pending')
-    tasks_in_progress = sum(1 for t in my_tasks if t.status == 'In Progress')
-    tasks_done = sum(1 for t in my_tasks if t.status == 'Done')
+    tasks = services.get_my_tasks(current_user.id)
+    tasks_pending = sum(1 for t in tasks if t.status != 'Done')
+    tasks_done = sum(1 for t in tasks if t.status == 'Done')
+    notifications = services.get_my_notifications(current_user.id, limit=5)
+    unread_count = services.get_unread_count(current_user.id)
 
-    # Project count
-    member_projects = ProjectMember.query.filter_by(user_id=current_user.id).count()
+    # Timesheet summary for dashboard
+    ts_summary = services.get_timesheet_summary(employee.id) if employee else {
+        'total_entries': 0, 'total_hours': 0, 'approved_hours': 0,
+        'pending_hours': 0, 'rejected_count': 0
+    }
+
+    # Manager: team pending count for dashboard card
+    team_pending = 0
+    team_size = 0
+    is_manager = False
+    if employee and services.is_manager(employee.id):
+        is_manager = True
+        team_pending = services.get_team_pending_count(employee.id)
+        team_size = len(services.get_direct_reports(employee.id))
 
     return render_template('employee/dashboard.html',
-                           employee=emp, today_att=today_att,
+                           employee=employee,
+                           profile_complete=profile_complete,
+                           today_att=today_att,
+                           leave_balances=leave_balances,
                            pending_leaves=pending_leaves,
-                           approved_leaves=approved_leaves,
-                           unread_notifications=unread_notifications,
-                           unread_count=unread_notifications,
-                           recent_reviews=recent_reviews,
-                           recent_attendance=recent_attendance,
-                           pending_timesheets=pending_timesheets,
-                           approved_ts_hours=round(approved_ts_hours, 1),
+                           att_summary=att_summary,
+                           shift_rules=shift_rules,
+                           comp_off_count=comp_off_count,
+                           tasks=tasks[:5],
                            tasks_pending=tasks_pending,
-                           tasks_in_progress=tasks_in_progress,
                            tasks_done=tasks_done,
-                           member_projects=member_projects)
+                           notifications=notifications,
+                           unread_count=unread_count,
+                           ts_summary=ts_summary,
+                           is_manager=is_manager,
+                           team_pending=team_pending,
+                           team_size=team_size)

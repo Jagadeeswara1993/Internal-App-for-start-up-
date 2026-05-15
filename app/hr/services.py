@@ -322,7 +322,7 @@ def get_leave_policies_for_employee(employee_id):
 
 def get_leave_balance(employee_id, leave_type, year=None):
     """Get leave balance for an employee. Returns LeaveBalance object or None."""
-    year = year or date.today().year
+    year = year or _get_cycle_label_year()
     return LeaveBalance.query.filter_by(
         employee_id=employee_id, leave_type=leave_type, year=year
     ).first()
@@ -330,45 +330,246 @@ def get_leave_balance(employee_id, leave_type, year=None):
 
 def get_all_leave_balances(employee_id, year=None):
     """Get all leave balances for an employee for a year."""
-    year = year or date.today().year
+    year = year or _get_cycle_label_year()
     return LeaveBalance.query.filter_by(
         employee_id=employee_id, year=year
     ).all()
 
 
+# ---------------------------------------------------------------------------
+# Leave Cycle Utilities
+# ---------------------------------------------------------------------------
+def _get_cycle_label_year(ref_date=None):
+    """Return the 'label year' for the current leave cycle.
+    - Calendar year: just the calendar year.
+    - Financial year (Apr-Mar): the year the cycle STARTED in.
+      e.g. Apr 2026 → Mar 2027 ⇒ label = 2026.
+    - Custom: same logic using custom start month."""
+    from app.models import CompanySettings
+    ref_date = ref_date or date.today()
+    settings = CompanySettings.get_settings()
+
+    if settings.leave_cycle_type == 'calendar':
+        return ref_date.year
+
+    # Financial or custom — cycle starts in a specific month
+    start_month = 4 if settings.leave_cycle_type == 'financial' else settings.custom_cycle_start_month
+    if ref_date.month >= start_month:
+        return ref_date.year
+    else:
+        return ref_date.year - 1
+
+
+def get_leave_cycle_dates(ref_date=None):
+    """Return (cycle_start, cycle_end) dates for the leave cycle containing ref_date.
+    - Calendar: Jan 1 → Dec 31
+    - Financial: Apr 1 → Mar 31
+    - Custom: custom_start → (custom_start - 1 day) next year
+    """
+    from app.models import CompanySettings
+    ref_date = ref_date or date.today()
+    settings = CompanySettings.get_settings()
+
+    if settings.leave_cycle_type == 'calendar':
+        return date(ref_date.year, 1, 1), date(ref_date.year, 12, 31)
+
+    # Determine start month/day
+    if settings.leave_cycle_type == 'financial':
+        start_month, start_day = 4, 1
+    else:
+        start_month = settings.custom_cycle_start_month or 4
+        start_day = settings.custom_cycle_start_day or 1
+
+    label_year = _get_cycle_label_year(ref_date)
+    cycle_start = date(label_year, start_month, start_day)
+
+    # Cycle end: one day before the same date next year
+    if start_month == 1 and start_day == 1:
+        cycle_end = date(label_year, 12, 31)
+    else:
+        next_year_start = date(label_year + 1, start_month, start_day)
+        cycle_end = next_year_start - timedelta(days=1)
+
+    return cycle_start, cycle_end
+
+
+def _calculate_remaining_months(doj, cycle_start, cycle_end):
+    """Calculate remaining months in the cycle from the date of joining.
+    The joining month is included (partial months count as full months)."""
+    if doj <= cycle_start:
+        # Joined before/at cycle start — full cycle
+        total_months = (cycle_end.year - cycle_start.year) * 12 + (cycle_end.month - cycle_start.month) + 1
+        return total_months, total_months
+
+    if doj > cycle_end:
+        return 0, 12  # joined after cycle — no allocation for this cycle
+
+    # Remaining months from joining month to cycle end (inclusive)
+    remaining = (cycle_end.year - doj.year) * 12 + (cycle_end.month - doj.month) + 1
+    total = (cycle_end.year - cycle_start.year) * 12 + (cycle_end.month - cycle_start.month) + 1
+    return remaining, total
+
+
+def _prorate_days(total_days, remaining_months, total_months, rounding='round'):
+    """Calculate prorated days based on remaining months."""
+    if total_months <= 0:
+        return 0
+    prorated = total_days * remaining_months / total_months
+    if rounding == 'round':
+        return round(prorated)
+    else:
+        return round(prorated, 1)
+
+
 def initialize_leave_balances(employee_id, year=None):
     """Initialize leave balances for an employee based on applicable policies.
     Uses designation-specific policies if available, otherwise global defaults.
-    Supports proration: if the policy has is_prorated=True, the allocation is
-    calculated proportionally based on the employee's date_of_joining.
-    Called when an employee is created or at the start of a new year."""
-    import math
-    year = year or date.today().year
+    Supports:
+      - Leave cycle awareness (calendar/financial/custom year)
+      - Proration for mid-year joiners
+      - Carry-forward from previous cycle
+    Called when an employee is created, profile is completed, or at cycle start."""
+    from app.models import CompanySettings
+    settings = CompanySettings.get_settings()
+
+    ref_date = date.today()
+    label_year = year or _get_cycle_label_year(ref_date)
+    cycle_start, cycle_end = get_leave_cycle_dates(ref_date)
+
     policies = get_leave_policies_for_employee(employee_id)
     emp = Employee.query.get(employee_id)
+    if not emp:
+        return
 
     for policy in policies:
         existing = LeaveBalance.query.filter_by(
-            employee_id=employee_id, leave_type=policy.leave_type, year=year
+            employee_id=employee_id, leave_type=policy.leave_type, year=label_year
         ).first()
-        if not existing:
-            allocated = policy.total_days
+        if existing:
+            continue  # Already initialized for this cycle
 
-            # Prorate if policy says so and the employee joined mid-year
-            if policy.is_prorated and emp and emp.date_of_joining:
-                doj = emp.date_of_joining
-                if doj.year == year:
-                    # Months remaining (including the joining month)
-                    remaining_months = 12 - doj.month + 1
-                    allocated = round(policy.total_days * remaining_months / 12, 1)
-                # If doj year < current year, they get the full allocation
+        allocated = float(policy.total_days)
+
+        # --- Proration for mid-year joiners ---
+        if policy.is_prorated and emp.date_of_joining:
+            doj = emp.date_of_joining
+            remaining_months, total_months = _calculate_remaining_months(doj, cycle_start, cycle_end)
+            if remaining_months < total_months:
+                allocated = _prorate_days(policy.total_days, remaining_months,
+                                          total_months, settings.proration_rounding)
+
+        # --- Carry-forward from previous cycle ---
+        carried = 0.0
+        if policy.carry_forward:
+            prev_label_year = label_year - 1
+            prev_balance = LeaveBalance.query.filter_by(
+                employee_id=employee_id, leave_type=policy.leave_type, year=prev_label_year
+            ).first()
+            if prev_balance and prev_balance.remaining > 0:
+                carry_limit = policy.max_carry_days if policy.max_carry_days and policy.max_carry_days > 0 else 999
+                carried = min(prev_balance.remaining, carry_limit)
+
+        balance = LeaveBalance(
+            employee_id=employee_id, leave_type=policy.leave_type,
+            total_allocated=allocated, used=0, carried_forward=carried,
+            year=label_year, cycle_start=cycle_start, cycle_end=cycle_end
+        )
+        db.session.add(balance)
+    db.session.flush()
+
+
+def allocate_leave_for_new_employee(employee_id):
+    """Entry point: Auto-create leave balances for a newly created/activated employee.
+    Called from admin user creation and HR profile completion."""
+    initialize_leave_balances(employee_id)
+
+
+def reallocate_leave_on_designation_change(employee_id):
+    """When an employee's designation changes, check if new policies apply
+    and create missing leave balance entries (does NOT remove existing ones)."""
+    label_year = _get_cycle_label_year()
+    policies = get_leave_policies_for_employee(employee_id)
+    emp = Employee.query.get(employee_id)
+    if not emp:
+        return
+
+    from app.models import CompanySettings
+    settings = CompanySettings.get_settings()
+    cycle_start, cycle_end = get_leave_cycle_dates()
+
+    for policy in policies:
+        existing = LeaveBalance.query.filter_by(
+            employee_id=employee_id, leave_type=policy.leave_type, year=label_year
+        ).first()
+        if existing:
+            continue  # Keep existing balance — don't reset mid-cycle
+
+        allocated = float(policy.total_days)
+        if policy.is_prorated and emp.date_of_joining:
+            remaining_months, total_months = _calculate_remaining_months(
+                emp.date_of_joining, cycle_start, cycle_end)
+            if remaining_months < total_months:
+                allocated = _prorate_days(policy.total_days, remaining_months,
+                                          total_months, settings.proration_rounding)
+
+        balance = LeaveBalance(
+            employee_id=employee_id, leave_type=policy.leave_type,
+            total_allocated=allocated, used=0, carried_forward=0,
+            year=label_year, cycle_start=cycle_start, cycle_end=cycle_end
+        )
+        db.session.add(balance)
+    db.session.flush()
+
+
+def run_yearly_leave_rollover():
+    """Process yearly leave rollover for ALL active employees.
+    Creates new-cycle balances with carry-forward from the previous cycle.
+    Should be called at the start of each new leave cycle (e.g. via cron or admin action).
+    Returns (processed_count, skipped_count)."""
+    ref_date = date.today()
+    label_year = _get_cycle_label_year(ref_date)
+    cycle_start, cycle_end = get_leave_cycle_dates(ref_date)
+
+    employees = Employee.query.filter_by(is_active=True).all()
+    processed = 0
+    skipped = 0
+
+    for emp in employees:
+        policies = get_leave_policies_for_employee(emp.id)
+        emp_had_new = False
+        for policy in policies:
+            existing = LeaveBalance.query.filter_by(
+                employee_id=emp.id, leave_type=policy.leave_type, year=label_year
+            ).first()
+            if existing:
+                skipped += 1
+                continue
+
+            # Carry-forward
+            carried = 0.0
+            if policy.carry_forward:
+                prev_year = label_year - 1
+                prev_bal = LeaveBalance.query.filter_by(
+                    employee_id=emp.id, leave_type=policy.leave_type, year=prev_year
+                ).first()
+                if prev_bal and prev_bal.remaining > 0:
+                    carry_limit = policy.max_carry_days if policy.max_carry_days and policy.max_carry_days > 0 else 999
+                    carried = min(prev_bal.remaining, carry_limit)
 
             balance = LeaveBalance(
-                employee_id=employee_id, leave_type=policy.leave_type,
-                total_allocated=allocated, used=0, year=year
+                employee_id=emp.id, leave_type=policy.leave_type,
+                total_allocated=float(policy.total_days), used=0,
+                carried_forward=carried,
+                year=label_year, cycle_start=cycle_start, cycle_end=cycle_end
             )
             db.session.add(balance)
+            emp_had_new = True
+
+        if emp_had_new:
+            processed += 1
+
     db.session.flush()
+    return processed, skipped
 
 
 def _check_blackout_dates(policy, start_date, end_date):
@@ -438,8 +639,8 @@ def validate_leave_request(employee_id, leave_type, start_date, end_date, is_hal
     if blocked:
         return False, f'Cannot apply leave during this period: {msg}'
 
-    # 5. Check balance
-    year = start_date.year
+    # 5. Check balance (use cycle-aware year, not calendar year from start_date)
+    year = _get_cycle_label_year(start_date)
     balance = get_leave_balance(employee_id, leave_type, year)
     if not balance:
         # Auto-initialize if missing
@@ -494,8 +695,8 @@ def approve_leave(leave_id, approver_id, step='hr'):
     leave.approved_by = approver_id
     leave.total_days = days
 
-    # Deduct from balance
-    balance = get_leave_balance(leave.employee_id, leave.leave_type, leave.start_date.year)
+    # Deduct from balance (use cycle-aware year)
+    balance = get_leave_balance(leave.employee_id, leave.leave_type, _get_cycle_label_year(leave.start_date))
     if balance:
         if balance.remaining < days:
             return False, f'Insufficient balance ({balance.remaining} remaining, {days:g} needed)'

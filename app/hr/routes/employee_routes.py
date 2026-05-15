@@ -81,7 +81,8 @@ def edit_employee(emp_id):
         emp.aadhar_number = form.aadhar_number.data or ''
         emp.location = form.location.data or ''
 
-        services.initialize_leave_balances(emp.id)
+        # Re-check leave allocation when designation changes
+        services.reallocate_leave_on_designation_change(emp.id)
         services.log_audit(current_user.id, 'UPDATE', 'Employee', emp.id,
                           f'Updated employee {emp.emp_code}', request.remote_addr or '')
         db.session.commit()

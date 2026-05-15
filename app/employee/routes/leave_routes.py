@@ -30,7 +30,24 @@ def my_leaves():
 def leave_balance():
     emp = Employee.query.filter_by(user_id=current_user.id).first_or_404()
     balances = services.get_my_leave_balances(emp.id)
-    return render_template('employee/leave_balance.html', balances=balances, employee=emp)
+
+    # Get cycle info for display
+    from app.hr.services import get_leave_cycle_dates, get_leave_policies_for_employee
+    from app.models import CompanySettings
+    cycle_start, cycle_end = get_leave_cycle_dates()
+    settings = CompanySettings.get_settings()
+    type_labels = {'calendar': 'Calendar Year', 'financial': 'Financial Year', 'custom': 'Custom Cycle'}
+    cycle_info = {
+        'type_label': type_labels.get(settings.leave_cycle_type, 'Financial Year'),
+        'start': cycle_start.strftime('%d %b %Y'),
+        'end': cycle_end.strftime('%d %b %Y'),
+    }
+
+    # Get policies for info table
+    policies = get_leave_policies_for_employee(emp.id)
+
+    return render_template('employee/leave_balance.html', balances=balances, employee=emp,
+                           cycle_info=cycle_info, policies=policies)
 
 
 @bp.route('/leaves/request', methods=['GET', 'POST'])
@@ -83,8 +100,8 @@ def cancel_leave(leave_id):
         return redirect(url_for('employee.my_leaves'))
 
     if leave.status == 'Approved' and leave.total_days:
-        from app.hr.services import get_leave_balance
-        balance = get_leave_balance(emp.id, leave.leave_type, leave.start_date.year)
+        from app.hr.services import get_leave_balance, _get_cycle_label_year
+        balance = get_leave_balance(emp.id, leave.leave_type, _get_cycle_label_year(leave.start_date))
         if balance:
             balance.used = max(0, balance.used - leave.total_days)
 

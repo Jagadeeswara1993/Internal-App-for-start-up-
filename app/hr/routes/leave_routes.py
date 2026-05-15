@@ -48,7 +48,8 @@ def leave_action(leave_id):
 @module_required('hr')
 def leave_balances():
     """Overview of all employees' leave balances."""
-    year = request.args.get('year', date.today().year, type=int)
+    from app.hr.services import _get_cycle_label_year
+    year = request.args.get('year', _get_cycle_label_year(), type=int)
     employees = Employee.query.order_by(Employee.emp_code).all()
     policies = LeavePolicy.query.filter_by(is_active=True).order_by(LeavePolicy.leave_type).all()
 
@@ -77,7 +78,8 @@ def cancel_leave(leave_id):
     cancel_reason = request.form.get('reason', 'Cancelled by HR')
 
     if leave.status == 'Approved' and leave.total_days:
-        balance = services.get_leave_balance(leave.employee_id, leave.leave_type, leave.start_date.year)
+        from app.hr.services import _get_cycle_label_year
+        balance = services.get_leave_balance(leave.employee_id, leave.leave_type, _get_cycle_label_year(leave.start_date))
         if balance:
             balance.used = max(0, balance.used - leave.total_days)
 

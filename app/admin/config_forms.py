@@ -69,3 +69,22 @@ class ShiftForm(FlaskForm):
     overtime_eligible = BooleanField('Overtime Eligible', default=False)
     is_active = BooleanField('Active', default=True)
     submit = SubmitField('Save Shift')
+
+
+class LeaveCycleForm(FlaskForm):
+    leave_cycle_type = SelectField('Leave Cycle Type', choices=[
+        ('calendar', 'Calendar Year (Jan → Dec)'),
+        ('financial', 'Financial Year (Apr → Mar)'),
+        ('custom', 'Custom Cycle')
+    ], default='financial')
+    custom_cycle_start_month = SelectField('Cycle Start Month', coerce=int, choices=[
+        (1, 'January'), (2, 'February'), (3, 'March'), (4, 'April'),
+        (5, 'May'), (6, 'June'), (7, 'July'), (8, 'August'),
+        (9, 'September'), (10, 'October'), (11, 'November'), (12, 'December')
+    ], default=4)
+    custom_cycle_start_day = IntegerField('Cycle Start Day', validators=[Optional(), NumberRange(1, 28)], default=1)
+    proration_rounding = SelectField('Proration Rounding', choices=[
+        ('round', 'Nearest Integer (e.g. 6.5 → 7)'),
+        ('decimal', 'Keep Decimal (e.g. 6.5)')
+    ], default='round')
+    submit = SubmitField('Save Leave Cycle Settings')

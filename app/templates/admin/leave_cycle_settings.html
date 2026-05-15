@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Leave Cycle Settings — Enterprise Portal{% endblock %}
+{% block page_title %}Leave Cycle Settings{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('admin.leave_policies') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Back to Leave Policies
+    </a>
+</div>
+
+<!-- Current Cycle Display -->
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div style="background:linear-gradient(135deg,#312e81,#4338ca); border-radius:14px; padding:24px; color:#fff;">
+            <div style="font-size:0.82rem; text-transform:uppercase; letter-spacing:0.05em; opacity:0.8; margin-bottom:6px;">
+                <i class="fas fa-calendar-alt me-1"></i> Current Leave Cycle
+            </div>
+            <div style="font-size:1.6rem; font-weight:700; margin-bottom:4px;">
+                {% if settings.leave_cycle_type == 'financial' %}
+                    Financial Year (Apr → Mar)
+                {% elif settings.leave_cycle_type == 'calendar' %}
+                    Calendar Year (Jan → Dec)
+                {% else %}
+                    Custom Cycle
+                {% endif %}
+            </div>
+            <div style="font-size:0.92rem; opacity:0.9;">
+                <i class="fas fa-play me-1"></i>
+                {{ cycle_start.strftime('%d %b %Y') }} &nbsp;→&nbsp; {{ cycle_end.strftime('%d %b %Y') }}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div style="background:linear-gradient(135deg,#065f46,#059669); border-radius:14px; padding:24px; color:#fff;">
+            <div style="font-size:0.82rem; text-transform:uppercase; letter-spacing:0.05em; opacity:0.8; margin-bottom:6px;">
+                <i class="fas fa-sync-alt me-1"></i> Yearly Rollover
+            </div>
+            <div style="font-size:0.95rem; margin-bottom:12px;">
+                Process leave rollover for all active employees. Creates new-cycle balances with carry-forward from previous cycle.
+            </div>
+            <form method="POST" action="{{ url_for('admin.trigger_leave_rollover') }}"
+                  onsubmit="return confirm('This will create new leave balances for all employees for the current cycle. Existing balances will NOT be overwritten. Continue?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-light btn-sm fw-semibold">
+                    <i class="fas fa-sync-alt me-1"></i> Run Leave Rollover Now
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Form -->
+<div class="form-card">
+    <h5 class="mb-3"><i class="fas fa-cog me-2 text-primary"></i>Leave Cycle Configuration</h5>
+    <form method="POST" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="row g-3">
+            <div class="col-md-6">
+                {{ form.leave_cycle_type.label(class="form-label fw-semibold") }}
+                {{ form.leave_cycle_type(class="form-select", id="leaveCycleType") }}
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i>
+                    <strong>Recommended:</strong> Financial Year (Apr → Mar) for Indian payroll & taxation alignment.
+                </small>
+            </div>
+
+            <div class="col-md-3" id="customMonthGroup" style="display:none;">
+                {{ form.custom_cycle_start_month.label(class="form-label fw-semibold") }}
+                {{ form.custom_cycle_start_month(class="form-select") }}
+            </div>
+
+            <div class="col-md-3" id="customDayGroup" style="display:none;">
+                {{ form.custom_cycle_start_day.label(class="form-label fw-semibold") }}
+                {{ form.custom_cycle_start_day(class="form-control") }}
+            </div>
+
+            <div class="col-md-6">
+                {{ form.proration_rounding.label(class="form-label fw-semibold") }}
+                {{ form.proration_rounding(class="form-select") }}
+                <small class="text-muted">
+                    Controls how prorated leave is rounded for mid-year joiners.
+                </small>
+            </div>
+        </div>
+
+        <!-- Cycle Type Explanation Cards -->
+        <div class="row g-3 mt-3">
+            <div class="col-md-4">
+                <div style="background:linear-gradient(135deg,#faf5ff,#f3e8ff); border:1px solid #c084fc; border-radius:10px; padding:14px;">
+                    <div class="fw-semibold mb-1" style="color:#7c3aed;">
+                        <i class="fas fa-calendar me-1"></i> Calendar Year
+                    </div>
+                    <div style="font-size:0.8rem; color:#6b21a8;">
+                        Jan 1 → Dec 31. Standard western calendar. Use if your company follows calendar-year reporting.
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7); border:1px solid #86efac; border-radius:10px; padding:14px;">
+                    <div class="fw-semibold mb-1" style="color:#16a34a;">
+                        <i class="fas fa-rupee-sign me-1"></i> Financial Year
+                    </div>
+                    <div style="font-size:0.8rem; color:#166534;">
+                        Apr 1 → Mar 31. Aligned with Indian payroll, taxation, and appraisal cycles. <strong>Recommended</strong> for Indian companies.
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div style="background:linear-gradient(135deg,#fff7ed,#ffedd5); border:1px solid #fdba74; border-radius:10px; padding:14px;">
+                    <div class="fw-semibold mb-1" style="color:#ea580c;">
+                        <i class="fas fa-sliders-h me-1"></i> Custom Cycle
+                    </div>
+                    <div style="font-size:0.8rem; color:#9a3412;">
+                        Choose any start month/day. Useful for companies with non-standard fiscal years or leave policies.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <hr class="my-4">
+        <div class="d-flex gap-2">
+            {{ form.submit(class="btn btn-primary") }}
+            <a href="{{ url_for('admin.leave_policies') }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const cycleType = document.getElementById('leaveCycleType');
+    const customMonth = document.getElementById('customMonthGroup');
+    const customDay = document.getElementById('customDayGroup');
+
+    function toggleCustomFields() {
+        const isCustom = cycleType.value === 'custom';
+        customMonth.style.display = isCustom ? '' : 'none';
+        customDay.style.display = isCustom ? '' : 'none';
+    }
+
+    cycleType.addEventListener('change', toggleCustomFields);
+    toggleCustomFields(); // initial state
+});
+</script>
+{% endblock %}
