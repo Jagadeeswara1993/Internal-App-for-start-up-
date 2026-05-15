@@ -85,28 +85,44 @@ document.addEventListener('DOMContentLoaded', function() {
     const projectSelect = document.getElementById('project-select');
     const taskSelect = document.getElementById('task-select');
 
+    function loadTasks(projectId) {
+        // Clear task dropdown
+        taskSelect.innerHTML = '<option value="0">— No Task (General) —</option>';
+
+        if (projectId && projectId !== '0') {
+            fetch(`/employee/api/tasks-for-project/${projectId}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.tasks && data.tasks.length > 0) {
+                        // Only show In Progress tasks for time logging
+                        const activeTasks = data.tasks.filter(t => t.status === 'In Progress');
+                        activeTasks.forEach(task => {
+                            const opt = document.createElement('option');
+                            opt.value = task.id;
+                            opt.textContent = `${task.title} [${task.status}]`;
+                            taskSelect.appendChild(opt);
+                        });
+                        if (activeTasks.length === 0) {
+                            const opt = document.createElement('option');
+                            opt.value = "0";
+                            opt.textContent = "— No In Progress tasks —";
+                            opt.disabled = true;
+                            taskSelect.appendChild(opt);
+                        }
+                    }
+                })
+                .catch(err => console.error('Error loading tasks:', err));
+        }
+    }
+
     if (projectSelect) {
         projectSelect.addEventListener('change', function() {
-            const projectId = this.value;
-            // Clear task dropdown
-            taskSelect.innerHTML = '<option value="0">— No Task (General) —</option>';
-
-            if (projectId && projectId !== '0') {
-                fetch(`/employee/api/tasks-for-project/${projectId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.tasks && data.tasks.length > 0) {
-                            data.tasks.forEach(task => {
-                                const opt = document.createElement('option');
-                                opt.value = task.id;
-                                opt.textContent = `${task.title} [${task.status}]`;
-                                taskSelect.appendChild(opt);
-                            });
-                        }
-                    })
-                    .catch(err => console.error('Error loading tasks:', err));
-            }
+            loadTasks(this.value);
         });
+        // Auto-load tasks for the pre-selected project on page load
+        if (projectSelect.value && projectSelect.value !== '0') {
+            loadTasks(projectSelect.value);
+        }
     }
 });
 </script>

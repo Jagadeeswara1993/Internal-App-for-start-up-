@@ -74,9 +74,19 @@ def submit_timesheet():
     form.project_id.choices = [(0, '— Select Project —')] + [(p.id, p.name) for p in projects]
     form.task_id.choices = [(0, '— Optional: Select Task —')]
 
-    if request.method == 'GET' and projects:
+    # On POST, populate task_id choices from the submitted project so WTForms
+    # doesn't reject the AJAX-loaded task as "Not a valid choice"
+    selected_project_id = request.form.get('project_id', type=int) if request.method == 'POST' else None
+    if selected_project_id and selected_project_id != 0:
+        tasks = Task.query.filter_by(
+            project_id=selected_project_id, assigned_to=current_user.id
+        ).order_by(Task.title).all()
+        form.task_id.choices += [(t.id, t.title) for t in tasks]
+    elif request.method == 'GET' and projects:
         first_project = projects[0]
-        tasks = Task.query.filter_by(project_id=first_project.id).order_by(Task.title).all()
+        tasks = Task.query.filter_by(
+            project_id=first_project.id, assigned_to=current_user.id
+        ).order_by(Task.title).all()
         form.task_id.choices += [(t.id, t.title) for t in tasks]
 
     if form.validate_on_submit():
@@ -93,6 +103,7 @@ def submit_timesheet():
         )
         db.session.add(ts)
 
+        # Notify the project PM
         project = Project.query.get(project_id)
         if project and project.assigned_pm:
             notif = Notification(
@@ -112,9 +123,11 @@ def submit_timesheet():
 @bp.route('/api/tasks-for-project/<int:project_id>')
 @module_required('employee')
 def api_tasks_for_project(project_id):
-    """AJAX endpoint — return tasks for a given project."""
-    tasks = Task.query.filter_by(project_id=project_id).order_by(Task.title).all()
-    return jsonify([{'id': t.id, 'title': t.title} for t in tasks])
+    """AJAX endpoint — return tasks assigned to the current user in a project."""
+    tasks = Task.query.filter_by(
+        project_id=project_id, assigned_to=current_user.id
+    ).order_by(Task.title).all()
+    return jsonify({'tasks': [{'id': t.id, 'title': t.title, 'status': t.status} for t in tasks]})
 
 
 # ===========================================================================

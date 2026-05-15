@@ -149,8 +149,14 @@ def my_tasks():
 @bp.route('/api/tasks/<int:task_id>/status', methods=['POST'])
 @module_required('employee')
 def update_task_status(task_id):
-    task = Task.query.filter_by(id=task_id, assigned_to=current_user.id).first_or_404()
-    new_status = request.form.get('status', '')
+    from flask import jsonify
+    task = Task.query.filter_by(id=task_id, assigned_to=current_user.id).first()
+    if not task:
+        return jsonify({'success': False, 'message': 'Task not found.'}), 404
+
+    data = request.get_json(silent=True) or {}
+    new_status = data.get('status', '')
+
     if new_status in ('Pending', 'In Progress', 'Done'):
         old_status = task.status
         task.status = new_status
@@ -165,10 +171,9 @@ def update_task_status(task_id):
             )
             db.session.add(notif)
         db.session.commit()
-        flash(f'Task status updated to {new_status}.', 'success')
+        return jsonify({'success': True, 'message': f'Task status updated to {new_status}.'})
     else:
-        flash('Invalid status.', 'danger')
-    return redirect(url_for('employee.my_tasks'))
+        return jsonify({'success': False, 'message': 'Invalid status.'}), 400
 
 
 @bp.route('/tasks/<int:task_id>/log-hours', methods=['POST'])

@@ -20,6 +20,9 @@ def profile():
         employee_id=emp.id, status='Pending'
     ).order_by(ProfileUpdateRequest.created_at.desc()).all()
 
+    from app.employee.forms import ProfileUpdateBatchForm
+    form = ProfileUpdateBatchForm()
+
     if request.method == 'POST':
         ALLOWED_FIELDS = {
             'phone': ('Phone Number', lambda v: v),
@@ -75,4 +78,5 @@ def profile():
 
     return render_template('employee/profile.html', employee=emp,
                            leave_balances=leave_balances,
-                           pending_requests=pending_requests)
+                           pending_requests=pending_requests,
+                           form=form)

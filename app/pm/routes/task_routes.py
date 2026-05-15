@@ -29,13 +29,49 @@ def add_task(project_id):
     
     if form.validate_on_submit():
         assigned = form.assigned_to.data if form.assigned_to.data else None
+        due_date = form.due_date.data
+        priority = form.priority.data
+
+        # ── Holiday check: block non-critical tasks on public holidays ──
+        if due_date and assigned:
+            from app.models import Holiday, Employee, CompOff
+            holiday = Holiday.query.filter_by(holiday_date=due_date, is_active=True).first()
+            if holiday:
+                if priority not in ('Critical', 'High'):
+                    flash(
+                        f'Cannot assign this task — {due_date.strftime("%d %b %Y")} is a public holiday '
+                        f'("{holiday.holiday_name}"). Only Critical or High priority tasks are allowed on holidays.',
+                        'danger'
+                    )
+                    return render_template('pm/task_form.html', form=form, project=project, title="Add Task")
+                else:
+                    # Critical/High task on holiday → auto-earn comp-off for the employee
+                    emp = Employee.query.filter_by(user_id=assigned).first()
+                    if emp:
+                        existing_comp = CompOff.query.filter_by(
+                            employee_id=emp.id, earned_date=due_date
+                        ).first()
+                        if not existing_comp:
+                            comp_off = CompOff(
+                                employee_id=emp.id,
+                                earned_date=due_date,
+                                hours_extra=form.estimated_hours.data or 8.0,
+                                status='Earned'
+                            )
+                            db.session.add(comp_off)
+                        flash(
+                            f'⚠️ {due_date.strftime("%d %b %Y")} is a holiday ("{holiday.holiday_name}"). '
+                            f'A compensatory off has been auto-earned for the assigned employee.',
+                            'warning'
+                        )
+
         data = {
             'project_id': project.id,
             'title': form.title.data,
             'description': form.description.data,
             'assigned_to': assigned,
-            'priority': form.priority.data,
-            'due_date': form.due_date.data,
+            'priority': priority,
+            'due_date': due_date,
             'estimated_hours': form.estimated_hours.data,
             'milestone_id': form.milestone_id.data if hasattr(form, 'milestone_id') and form.milestone_id.data else None
         }

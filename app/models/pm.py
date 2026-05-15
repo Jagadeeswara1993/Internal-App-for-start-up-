@@ -111,8 +111,11 @@ class Task(db.Model):
     estimated_hours = db.Column(db.Float, default=0.0)       # PM's estimate
     actual_hours = db.Column(db.Float, default=0.0)          # Employee's actual spent hours
     due_date = db.Column(db.Date, nullable=True)
+    milestone_id = db.Column(db.Integer, db.ForeignKey('milestones.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    milestone = db.relationship('Milestone', backref=db.backref('tasks', lazy='dynamic'))
 
     def __repr__(self):
         return f'<Task {self.title}>'
