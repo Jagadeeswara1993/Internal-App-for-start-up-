@@ -162,6 +162,46 @@ def update_task_status(task_id):
         task.status = new_status
         services.log_audit(current_user.id, 'UPDATE', 'Task', task.id,
                           f'Status: {old_status}→{new_status}', request.remote_addr or '')
+
+        # ── Auto-cascade: parent task + epic ──
+        if old_status != new_status and task.parent_task_id:
+            parent = Task.query.get(task.parent_task_id)
+            if parent:
+                # Aggregate hours from subtasks to parent
+                parent.actual_hours = sum(s.actual_hours or 0 for s in parent.subtasks)
+
+                # Check if all subtasks are Done
+                all_done = parent.subtasks.filter(Task.status != 'Done').count() == 0
+                any_in_progress = parent.subtasks.filter(
+                    Task.status.in_(['In Progress', 'Done'])
+                ).count() > 0
+
+                if all_done and parent.status != 'Done':
+                    parent.status = 'Done'
+                    services.log_audit(current_user.id, 'AUTO_COMPLETE', 'Task', parent.id,
+                                      f'Auto-completed parent "{parent.title}" (all subtasks done)',
+                                      request.remote_addr or '')
+                elif not all_done and parent.status == 'Done':
+                    parent.status = 'In Progress'
+                    services.log_audit(current_user.id, 'AUTO_REVERT', 'Task', parent.id,
+                                      f'Reverted parent "{parent.title}" to In Progress',
+                                      request.remote_addr or '')
+                elif any_in_progress and parent.status == 'Pending':
+                    parent.status = 'In Progress'
+
+                # Auto-update epic status
+                if parent.epic_id:
+                    from app.models import Epic
+                    epic = Epic.query.get(parent.epic_id)
+                    if epic:
+                        epic.check_and_update_status()
+        elif old_status != new_status and not task.parent_task_id and task.epic_id:
+            # Top-level task changed — update its epic
+            from app.models import Epic
+            epic = Epic.query.get(task.epic_id)
+            if epic:
+                epic.check_and_update_status()
+
         if task.project.assigned_pm:
             notif = Notification(
                 user_id=task.project.assigned_pm,

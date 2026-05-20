@@ -84,6 +84,66 @@ def update_epic(epic, data, updater_id):
     return epic
 
 # ===========================================================================
+# TASK SERVICES — CASCADE HELPER
+# ===========================================================================
+def _cascade_status_up(task, updater_id):
+    """After a task status change, cascade effects upward:
+    1. Aggregate subtask hours to parent task
+    2. Auto-complete parent when ALL subtasks are Done
+    3. Revert parent to 'In Progress' if a subtask moves OUT of Done
+    4. Auto-update the Epic status based on all its tasks
+    """
+    # ── Step 1: Parent task cascade ──
+    if task.parent_task_id:
+        parent = Task.query.get(task.parent_task_id)
+        if parent:
+            # Aggregate hours from subtasks to parent
+            parent.actual_hours = sum(s.actual_hours or 0 for s in parent.subtasks)
+            parent.estimated_hours = sum(s.estimated_hours or 0 for s in parent.subtasks)
+
+            # Check if all subtasks are Done
+            all_done = parent.subtasks.filter(Task.status != 'Done').count() == 0
+            any_in_progress = parent.subtasks.filter(
+                Task.status.in_(['In Progress', 'Done'])
+            ).count() > 0
+
+            if all_done and parent.status != 'Done':
+                parent.status = 'Done'
+                log_audit(updater_id, 'AUTO_COMPLETE', 'Task', parent.id,
+                          f'Auto-completed parent "{parent.title}" (all subtasks done)')
+                if parent.assigned_to:
+                    notify(parent.assigned_to, 'Task Auto-Completed',
+                           f'Parent task "{parent.title}" has been auto-completed — all subtasks are done.',
+                           category='success', link=f'/pm/projects/{parent.project_id}')
+            elif not all_done and parent.status == 'Done':
+                # A subtask was moved back out of Done — revert parent
+                parent.status = 'In Progress'
+                log_audit(updater_id, 'AUTO_REVERT', 'Task', parent.id,
+                          f'Reverted parent "{parent.title}" to In Progress (subtask un-done)')
+            elif any_in_progress and parent.status == 'Pending':
+                # At least one subtask started — move parent to In Progress
+                parent.status = 'In Progress'
+
+            # Now cascade further — update the epic of the parent task
+            _update_epic_for_task(parent, updater_id)
+    else:
+        # This IS a top-level task — update its own epic
+        _update_epic_for_task(task, updater_id)
+
+
+def _update_epic_for_task(task, updater_id):
+    """Auto-update the epic status when a task (or parent task) changes."""
+    if task.epic_id:
+        epic = Epic.query.get(task.epic_id)
+        if epic:
+            old_epic_status = epic.status
+            epic.check_and_update_status()
+            if epic.status != old_epic_status:
+                log_audit(updater_id, 'AUTO_UPDATE', 'Epic', epic.id,
+                          f'Epic "{epic.title}" status: {old_epic_status}→{epic.status}')
+
+
+# ===========================================================================
 # TASK SERVICES
 # ===========================================================================
 def create_task(data, creator_id):
@@ -118,6 +178,16 @@ def create_task(data, creator_id):
         notify(task.assigned_to, 'Task Assigned',
                f'You have been assigned task "{task.title}" in project "{project.name}".',
                category='info', link=f'/pm/projects/{project.id}')
+
+    # If adding a subtask, update parent status (Pending → In Progress)
+    if parent_task_id:
+        parent = Task.query.get(parent_task_id)
+        if parent and parent.status == 'Pending':
+            parent.status = 'In Progress'
+        # Aggregate hours
+        if parent:
+            parent.estimated_hours = sum(s.estimated_hours or 0 for s in parent.subtasks)
+
     return task
 
 def update_task(task, data, updater_id):
@@ -154,15 +224,9 @@ def update_task(task, data, updater_id):
                f'Task "{task.title}" status changed from {old_status} to {new_status}.',
                category='info', link=f'/pm/projects/{project.id}')
 
-    # Auto-complete parent when all subtasks are Done
-    if new_status == 'Done' and task.parent_task_id:
-        parent = Task.query.get(task.parent_task_id)
-        if parent:
-            all_done = parent.subtasks.filter(Task.status != 'Done').count() == 0
-            if all_done and parent.status != 'Done':
-                parent.status = 'Done'
-                log_audit(updater_id, 'AUTO_COMPLETE', 'Task', parent.id,
-                          f'Auto-completed parent task "{parent.title}" (all subtasks done)')
+    # Cascade status changes upward (parent → epic)
+    if old_status != new_status:
+        _cascade_status_up(task, updater_id)
 
     return task
 
@@ -184,22 +248,21 @@ def update_task_status(task_id, new_status, updater_id):
                f'Task "{task.title}" moved from {old_status} to {new_status}.',
                category='info', link=f'/pm/projects/{project.id}')
 
-    # Auto-complete parent when all subtasks are Done
-    if new_status == 'Done' and task.parent_task_id:
-        parent = Task.query.get(task.parent_task_id)
-        if parent:
-            all_done = parent.subtasks.filter(Task.status != 'Done').count() == 0
-            if all_done and parent.status != 'Done':
-                parent.status = 'Done'
-                log_audit(updater_id, 'AUTO_COMPLETE', 'Task', parent.id,
-                          f'Auto-completed parent "{parent.title}"')
+    # Cascade status changes upward (parent → epic)
+    if old_status != new_status:
+        _cascade_status_up(task, updater_id)
 
     return task
 
 def log_task_hours(task, hours, updater_id):
-    """Log actual hours on a task."""
+    """Log actual hours on a task and aggregate to parent."""
     task.actual_hours = (task.actual_hours or 0) + hours
     log_audit(updater_id, 'LOG_HOURS', 'Task', task.id, f'Logged {hours}h on "{task.title}"')
+    # Aggregate hours to parent
+    if task.parent_task_id:
+        parent = Task.query.get(task.parent_task_id)
+        if parent:
+            parent.actual_hours = sum(s.actual_hours or 0 for s in parent.subtasks)
     return task
 
 # ===========================================================================
@@ -235,6 +298,11 @@ def approve_timesheet(ts, approver_id):
         task = Task.query.get(ts.task_id)
         if task:
             task.actual_hours = (task.actual_hours or 0) + ts.hours_worked
+            # Aggregate hours to parent task
+            if task.parent_task_id:
+                parent = Task.query.get(task.parent_task_id)
+                if parent:
+                    parent.actual_hours = sum(s.actual_hours or 0 for s in parent.subtasks)
 
     log_audit(approver_id, 'APPROVE', 'Timesheet', ts.id,
               f'Approved {ts.hours_worked}h for emp#{ts.employee_id}')
@@ -267,6 +335,11 @@ def bulk_approve_timesheets(timesheets, approver_id):
                 task = Task.query.get(ts.task_id)
                 if task:
                     task.actual_hours = (task.actual_hours or 0) + ts.hours_worked
+                    # Aggregate hours to parent task
+                    if task.parent_task_id:
+                        parent = Task.query.get(task.parent_task_id)
+                        if parent:
+                            parent.actual_hours = sum(s.actual_hours or 0 for s in parent.subtasks)
             
             notify(ts.employee.user_id, 'Timesheet Approved',
                    f'Your timesheet for {ts.date.strftime("%d %b %Y")} ({ts.hours_worked}h) approved.',

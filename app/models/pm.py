@@ -110,11 +110,50 @@ class Epic(db.Model):
 
     @property
     def progress(self):
-        total = self.tasks.count()
+        """Calculate progress counting ALL tasks in the hierarchy (parents + subtasks)."""
+        from sqlalchemy import or_
+        # Count all tasks that belong to this epic (directly or via parent)
+        direct_task_ids = [t.id for t in self.tasks]
+        if not direct_task_ids:
+            return 0
+        # Also count subtasks whose parent belongs to this epic
+        all_tasks = Task.query.filter(
+            or_(
+                Task.epic_id == self.id,
+                Task.parent_task_id.in_(direct_task_ids)
+            )
+        ).all()
+        total = len(all_tasks)
         if total == 0:
             return 0
-        done = self.tasks.filter_by(status='Done').count()
+        done = sum(1 for t in all_tasks if t.status == 'Done')
         return round((done / total) * 100)
+
+    def check_and_update_status(self):
+        """Auto-update epic status based on task completion.
+        - All tasks Done → Epic 'Done'
+        - Any task In Progress or Done → Epic 'In Progress'
+        - Otherwise → Epic 'To Do'
+        """
+        from sqlalchemy import or_
+        direct_task_ids = [t.id for t in self.tasks]
+        if not direct_task_ids:
+            return
+        all_tasks = Task.query.filter(
+            or_(
+                Task.epic_id == self.id,
+                Task.parent_task_id.in_(direct_task_ids)
+            )
+        ).all()
+        if not all_tasks:
+            return
+        statuses = {t.status for t in all_tasks}
+        if statuses == {'Done'}:
+            self.status = 'Done'
+        elif 'In Progress' in statuses or 'Done' in statuses:
+            self.status = 'In Progress'
+        else:
+            self.status = 'To Do'
 
     def __repr__(self):
         return f'<Epic {self.title}>'
@@ -154,6 +193,20 @@ class Task(db.Model):
     def is_parent(self):
         """Check if this task has sub-tasks."""
         return self.subtasks.count() > 0
+
+    @property
+    def total_estimated_hours(self):
+        """Sum of subtask estimated hours (or own if no subtasks)."""
+        if self.is_parent:
+            return sum(s.estimated_hours or 0 for s in self.subtasks)
+        return self.estimated_hours or 0
+
+    @property
+    def total_actual_hours(self):
+        """Sum of subtask actual hours (or own if no subtasks)."""
+        if self.is_parent:
+            return sum(s.actual_hours or 0 for s in self.subtasks)
+        return self.actual_hours or 0
 
     def __repr__(self):
         return f'<Task {self.title}>'

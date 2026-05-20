@@ -588,6 +588,51 @@ def update_task_status(user_id, task_id, new_status, ip=''):
         )
         
         task.project.check_and_update_status()
+
+        # ── Auto-cascade: parent task + epic ──
+        if task.parent_task_id:
+            parent = Task.query.get(task.parent_task_id)
+            if parent:
+                # Aggregate hours from subtasks to parent
+                parent.actual_hours = sum(s.actual_hours or 0 for s in parent.subtasks)
+
+                # Check if all subtasks are Done
+                all_done = parent.subtasks.filter(Task.status != 'Done').count() == 0
+                any_in_progress = parent.subtasks.filter(
+                    Task.status.in_(['In Progress', 'Done'])
+                ).count() > 0
+
+                if all_done and parent.status != 'Done':
+                    parent.status = 'Done'
+                    log_employee_action('AUTO_COMPLETE', 'Task', parent.id,
+                                      f'Auto-completed parent "{parent.title}" (all subtasks done)', ip)
+                    # Also notify
+                    create_notification(
+                        project.created_by,
+                        'Task Auto-Completed',
+                        f'Parent task "{parent.title}" auto-completed — all subtasks are done.',
+                        category='success',
+                        link=f'/pm/projects/{project.id}'
+                    )
+                elif not all_done and parent.status == 'Done':
+                    parent.status = 'In Progress'
+                    log_employee_action('AUTO_REVERT', 'Task', parent.id,
+                                      f'Reverted parent "{parent.title}" to In Progress', ip)
+                elif any_in_progress and parent.status == 'Pending':
+                    parent.status = 'In Progress'
+
+                # Auto-update epic status
+                if parent.epic_id:
+                    from app.models import Epic
+                    epic = Epic.query.get(parent.epic_id)
+                    if epic:
+                        epic.check_and_update_status()
+        elif task.epic_id:
+            # Top-level task changed — update its epic
+            from app.models import Epic
+            epic = Epic.query.get(task.epic_id)
+            if epic:
+                epic.check_and_update_status()
         
         logger.info(f'Task #{task.id} status updated to {new_status} by emp#{user_id}')
         return True, f'Task status updated to {new_status}.'
