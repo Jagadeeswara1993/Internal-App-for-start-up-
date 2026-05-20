@@ -1,20 +1,109 @@
-"""PM task and milestone management routes."""
+"""PM task, epic, and milestone management routes."""
 
 from flask import redirect, url_for, flash, request, abort, render_template
 from flask_login import current_user
 from app.pm import bp
 from app.decorators import module_required
 from app.extensions import db
-from app.models import Project, Task, Milestone, User
-from app.pm.forms import TaskForm, MilestoneForm
+from app.models import Project, Task, Milestone, User, Epic
+from app.pm.forms import TaskForm, MilestoneForm, EpicForm
 from app.pm.routes.helpers import (_is_pm_or_admin, _can_view_project,
                                     log_audit)
 from app.pm import services
 
 
 # ===========================================================================
+# EPIC MANAGEMENT
+# ===========================================================================
+@bp.route('/projects/<int:project_id>/epics/add', methods=['GET', 'POST'])
+@module_required('pm')
+def add_epic(project_id):
+    project = Project.query.get_or_404(project_id)
+    if not _is_pm_or_admin(current_user, project):
+        flash('Only the PM or Admin can create epics.', 'danger')
+        return redirect(url_for('pm.project_detail', project_id=project.id))
+
+    form = EpicForm()
+    if form.validate_on_submit():
+        data = {
+            'project_id': project.id,
+            'title': form.title.data,
+            'description': form.description.data,
+            'status': form.status.data,
+            'color_label': form.color_label.data or '#6366f1'
+        }
+        epic = services.create_epic(data, current_user.id)
+        db.session.commit()
+        flash(f'Epic "{epic.title}" created.', 'success')
+        return redirect(url_for('pm.project_detail', project_id=project.id))
+
+    return render_template('pm/epic_form.html', form=form, project=project, title="Add Epic")
+
+
+@bp.route('/epics/<int:epic_id>/edit', methods=['GET', 'POST'])
+@module_required('pm')
+def edit_epic(epic_id):
+    epic = Epic.query.get_or_404(epic_id)
+    project = epic.project
+    if not _is_pm_or_admin(current_user, project):
+        abort(403)
+
+    form = EpicForm(obj=epic)
+    if form.validate_on_submit():
+        data = {
+            'title': form.title.data,
+            'description': form.description.data,
+            'status': form.status.data,
+            'color_label': form.color_label.data or '#6366f1'
+        }
+        services.update_epic(epic, data, current_user.id)
+        db.session.commit()
+        flash(f'Epic "{epic.title}" updated.', 'success')
+        return redirect(url_for('pm.project_detail', project_id=project.id))
+
+    return render_template('pm/epic_form.html', form=form, project=project, title="Edit Epic")
+
+
+@bp.route('/epics/<int:epic_id>/delete', methods=['POST'])
+@module_required('pm')
+def delete_epic(epic_id):
+    epic = Epic.query.get_or_404(epic_id)
+    project = epic.project
+    if not _is_pm_or_admin(current_user, project):
+        abort(403)
+    title = epic.title
+    # Unlink tasks from this epic before deleting
+    Task.query.filter_by(epic_id=epic.id).update({'epic_id': None})
+    log_audit(current_user.id, 'DELETE', 'Epic', epic.id, f'Deleted epic "{title}"')
+    db.session.delete(epic)
+    db.session.commit()
+    flash(f'Epic "{title}" deleted.', 'info')
+    return redirect(url_for('pm.project_detail', project_id=project.id))
+
+
+# ===========================================================================
 # TASK MANAGEMENT
 # ===========================================================================
+def _populate_task_form(form, project, task=None):
+    """Populate dynamic choices for task form fields."""
+    members = project.members
+    form.assigned_to.choices = [(0, '— Unassigned —')] + \
+        [(m.user_id, m.user.full_name) for m in members]
+
+    epics = Epic.query.filter_by(project_id=project.id).order_by(Epic.title).all()
+    form.epic_id.choices = [(0, '— No Epic —')] + [(e.id, e.title) for e in epics]
+
+    # Parent task choices: only top-level tasks (not sub-tasks themselves)
+    parent_candidates = Task.query.filter_by(
+        project_id=project.id, parent_task_id=None
+    ).order_by(Task.title).all()
+    # Exclude self if editing
+    if task:
+        parent_candidates = [t for t in parent_candidates if t.id != task.id]
+    form.parent_task_id.choices = [(0, '— None (Top-level) —')] + \
+        [(t.id, f'{t.title}') for t in parent_candidates]
+
+
 @bp.route('/projects/<int:project_id>/tasks/add', methods=['GET', 'POST'])
 @module_required('pm')
 def add_task(project_id):
@@ -24,8 +113,7 @@ def add_task(project_id):
         return redirect(url_for('pm.project_detail', project_id=project.id))
         
     form = TaskForm()
-    members = project.members
-    form.assigned_to.choices = [(0, '— Unassigned —')] + [(m.user_id, m.user.full_name) for m in members]
+    _populate_task_form(form, project)
     
     if form.validate_on_submit():
         assigned = form.assigned_to.data if form.assigned_to.data else None
@@ -73,7 +161,10 @@ def add_task(project_id):
             'priority': priority,
             'due_date': due_date,
             'estimated_hours': form.estimated_hours.data,
-            'milestone_id': form.milestone_id.data if hasattr(form, 'milestone_id') and form.milestone_id.data else None
+            'milestone_id': form.milestone_id.data if hasattr(form, 'milestone_id') and form.milestone_id.data else None,
+            'task_type': form.task_type.data,
+            'epic_id': form.epic_id.data if form.epic_id.data else None,
+            'parent_task_id': form.parent_task_id.data if form.parent_task_id.data else None
         }
         task = services.create_task(data, current_user.id)
         db.session.commit()
@@ -94,10 +185,13 @@ def edit_task(task_id):
             abort(403)
             
     form = TaskForm(obj=task)
-    form.assigned_to.choices = [(0, '— Unassigned —')] + [(m.user_id, m.user.full_name) for m in project.members]
+    _populate_task_form(form, project, task)
     
     if request.method == 'GET':
         form.assigned_to.data = task.assigned_to if task.assigned_to else 0
+        form.epic_id.data = task.epic_id if task.epic_id else 0
+        form.parent_task_id.data = task.parent_task_id if task.parent_task_id else 0
+        form.task_type.data = task.task_type or 'Task'
 
     if form.validate_on_submit():
         data = {
@@ -107,7 +201,10 @@ def edit_task(task_id):
             'status': form.status.data,
             'due_date': form.due_date.data,
             'estimated_hours': form.estimated_hours.data,
-            'assigned_to': form.assigned_to.data if form.assigned_to.data else None
+            'assigned_to': form.assigned_to.data if form.assigned_to.data else None,
+            'task_type': form.task_type.data,
+            'epic_id': form.epic_id.data if form.epic_id.data else None,
+            'parent_task_id': form.parent_task_id.data if form.parent_task_id.data else None
         }
         if hasattr(form, 'milestone_id'):
             data['milestone_id'] = form.milestone_id.data if form.milestone_id.data else None

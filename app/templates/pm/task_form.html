@@ -22,6 +22,21 @@
                 {{ form.description.label(class="form-label") }}
                 {{ form.description(class="form-control", rows=3, placeholder="Detailed task description...") }}
             </div>
+
+            <!-- Task Type & Epic (NEW) -->
+            <div class="col-md-4">
+                {{ form.task_type.label(class="form-label") }}
+                {{ form.task_type(class="form-select", id="task-type-select") }}
+            </div>
+            <div class="col-md-4">
+                {{ form.epic_id.label(class="form-label") }}
+                {{ form.epic_id(class="form-select") }}
+            </div>
+            <div class="col-md-4">
+                {{ form.parent_task_id.label(class="form-label") }}
+                {{ form.parent_task_id(class="form-select", id="parent-task-select") }}
+            </div>
+
             <div class="col-md-6">
                 {{ form.assigned_to.label(class="form-label") }}
                 {{ form.assigned_to(class="form-select") }}
@@ -51,4 +66,17 @@
         </div>
     </form>
 </div>
+
+<script>
+// Auto-set type to "Sub-task" when parent is selected
+document.getElementById('parent-task-select').addEventListener('change', function() {
+    const typeSelect = document.getElementById('task-type-select');
+    if (this.value && this.value !== '0') {
+        typeSelect.value = 'Task';
+        typeSelect.closest('.col-md-4').querySelector('.form-label').innerHTML = 'Type <small class="text-muted">(auto: Sub-task)</small>';
+    } else {
+        typeSelect.closest('.col-md-4').querySelector('.form-label').textContent = 'Type';
+    }
+});
+</script>
 {% endblock %}

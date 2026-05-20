@@ -170,12 +170,9 @@ def perform_checkout(employee_id, check_time=None):
     existing.check_out = check_time
     existing.working_hours = existing.calc_working_hours()
 
-    # Apply shift rules for half-day/absent detection
+    # Apply shift rules for half-day detection
     rules = get_shift_rules_for_employee(employee_id)
-    
-    if existing.working_hours < 1.0:
-        existing.status = 'Absent'
-    elif existing.working_hours < rules['half_day_hours']:
+    if existing.working_hours < rules['half_day_hours']:
         existing.status = 'Half-Day'
     elif existing.status != 'Late':
         existing.status = 'Present'

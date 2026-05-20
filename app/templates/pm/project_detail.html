@@ -65,8 +65,9 @@
 </div>
 
 <div class="row g-4">
-    <!-- Members Panel -->
+    <!-- Left Sidebar: Members + Milestones + Epics -->
     <div class="col-lg-4">
+        <!-- Members Panel -->
         <div class="data-card mb-4">
             <div class="card-header">
                 <h5><i class="fas fa-users me-2"></i>Team ({{ members | length }})</h5>
@@ -119,7 +120,7 @@
         </div>
 
         <!-- Milestones Panel -->
-        <div class="data-card">
+        <div class="data-card mb-4">
             <div class="card-header">
                 <h5><i class="fas fa-flag-checkered me-2"></i>Milestones ({{ milestones | length }})</h5>
                 <a href="{{ url_for('pm.add_milestone', project_id=project.id) }}" class="btn btn-primary btn-sm">
@@ -161,6 +162,55 @@
                 {% endfor %}
             </div>
         </div>
+
+        <!-- Epics Panel -->
+        <div class="data-card">
+            <div class="card-header">
+                <h5><i class="fas fa-bolt me-2"></i>Epics ({{ epics | length }})</h5>
+                {% if can_manage %}
+                <a href="{{ url_for('pm.add_epic', project_id=project.id) }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus me-1"></i>Add
+                </a>
+                {% endif %}
+            </div>
+            <div class="p-3">
+                {% for epic in epics %}
+                <div class="py-2 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center gap-2">
+                            <span style="width:12px; height:12px; border-radius:3px; background:{{ epic.color_label }}; display:inline-block; flex-shrink:0;"></span>
+                            <div>
+                                <span class="fw-semibold" style="font-size:0.88rem;">{{ epic.title }}</span>
+                                <br>
+                                <small class="text-muted">{{ epic.tasks.count() }} tasks · {{ epic.progress }}% done</small>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="badge-status badge-{{ epic.status | lower | replace(' ', '-') }}" style="font-size:0.65rem;">{{ epic.status }}</span>
+                            {% if can_manage %}
+                            <a href="{{ url_for('pm.edit_epic', epic_id=epic.id) }}" class="btn-action" style="width:24px;height:24px;" title="Edit">
+                                <i class="fas fa-pen" style="font-size:0.6rem;"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('pm.delete_epic', epic_id=epic.id) }}" class="d-inline"
+                                  onsubmit="return confirm('Delete this epic? Tasks will be unlinked, not deleted.')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn-action danger" style="width:24px;height:24px;" title="Delete">
+                                    <i class="fas fa-trash" style="font-size:0.6rem;"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <!-- Epic progress bar -->
+                    <div class="progress mt-1" style="height:4px;">
+                        <div class="progress-bar" style="width:{{ epic.progress }}%; background:{{ epic.color_label }}" role="progressbar"></div>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-center py-3" style="color:var(--text-secondary); font-size:0.85rem;">No epics yet. Create one to group tasks.</p>
+                {% endfor %}
+            </div>
+        </div>
     </div>
 
     <!-- Tasks Panel -->
@@ -168,17 +218,33 @@
         <div class="data-card">
             <div class="card-header">
                 <h5><i class="fas fa-list-check me-2"></i>Tasks ({{ tasks | length }})</h5>
-                {% if can_manage %}
-                <a href="{{ url_for('pm.add_task', project_id=project.id) }}" class="btn btn-primary btn-sm" id="btn-add-task">
-                    <i class="fas fa-plus me-1"></i>Add Task
-                </a>
-                {% endif %}
+                <div class="d-flex align-items-center gap-2">
+                    <!-- View Toggle -->
+                    <div class="d-inline-flex border rounded overflow-hidden" style="border-color:var(--border-color) !important;">
+                        <a href="{{ url_for('pm.project_detail', project_id=project.id) }}"
+                           class="px-3 py-1 text-decoration-none fw-semibold"
+                           style="font-size:0.78rem; background:var(--primary); color:white;">
+                            <i class="fas fa-table-list me-1"></i>Table
+                        </a>
+                        <a href="{{ url_for('pm.board_view', project_id=project.id) }}"
+                           class="px-3 py-1 text-decoration-none fw-semibold"
+                           style="font-size:0.78rem; color:var(--text-secondary); background:white;">
+                            <i class="fas fa-columns me-1"></i>Board
+                        </a>
+                    </div>
+                    {% if can_manage %}
+                    <a href="{{ url_for('pm.add_task', project_id=project.id) }}" class="btn btn-primary btn-sm" id="btn-add-task">
+                        <i class="fas fa-plus me-1"></i>Add Task
+                    </a>
+                    {% endif %}
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="table" id="tbl-tasks">
                     <thead>
                         <tr>
                             <th>Task</th>
+                            <th>Type</th>
                             <th>Assigned To</th>
                             <th>Est. Hours</th>
                             <th>Actual Hours</th>
@@ -189,9 +255,29 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for task in tasks %}
+                        {% set top_level_tasks = tasks | selectattr('parent_task_id', 'none') | list %}
+                        {% for task in top_level_tasks %}
                         <tr>
-                            <td class="fw-semibold">{{ task.title }}</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if task.epic %}
+                                    <span style="width:8px; height:8px; border-radius:2px; background:{{ task.epic.color_label }}; display:inline-block; flex-shrink:0;" title="Epic: {{ task.epic.title }}"></span>
+                                    {% endif %}
+                                    <span class="fw-semibold">{{ task.title }}</span>
+                                    {% if task.is_parent %}
+                                    <span class="badge bg-light text-dark border" style="font-size:0.62rem;">{{ task.subtasks.count() }} sub</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+                            <td>
+                                {% if task.task_type == 'Story' %}
+                                <span class="badge" style="background:#dbeafe; color:#2563eb; font-size:0.68rem;"><i class="fas fa-bookmark me-1"></i>Story</span>
+                                {% elif task.task_type == 'Bug' %}
+                                <span class="badge" style="background:#fee2e2; color:#dc2626; font-size:0.68rem;"><i class="fas fa-bug me-1"></i>Bug</span>
+                                {% else %}
+                                <span class="badge" style="background:#d1fae5; color:#059669; font-size:0.68rem;"><i class="fas fa-check-square me-1"></i>Task</span>
+                                {% endif %}
+                            </td>
                             <td>{{ task.assignee.full_name if task.assignee else '—' }}</td>
                             <td>{{ task.estimated_hours|default(0.0) }}</td>
                             <td class="{% if task.actual_hours > task.estimated_hours and task.estimated_hours > 0 %}text-danger fw-bold{% endif %}">
@@ -225,14 +311,49 @@
                                 </div>
                             </td>
                         </tr>
+                        <!-- Sub-tasks (indented) -->
+                        {% for sub in task.subtasks %}
+                        <tr style="background:#f8fafc;">
+                            <td style="padding-left:36px;">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="fas fa-turn-up fa-rotate-90" style="font-size:0.65rem; color:var(--text-secondary);"></i>
+                                    <span style="font-size:0.85rem;">{{ sub.title }}</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge" style="background:#e0e7ff; color:#4f46e5; font-size:0.68rem;"><i class="fas fa-indent me-1"></i>Sub</span>
+                            </td>
+                            <td style="font-size:0.85rem;">{{ sub.assignee.full_name if sub.assignee else '—' }}</td>
+                            <td style="font-size:0.85rem;">{{ sub.estimated_hours|default(0.0) }}</td>
+                            <td style="font-size:0.85rem;">{% if sub.actual_hours > 0 %}{{ sub.actual_hours }}{% else %}—{% endif %}</td>
+                            <td><span class="badge-status badge-{{ sub.priority | lower }}" style="font-size:0.65rem;">{{ sub.priority }}</span></td>
+                            <td><span class="badge-status badge-{{ sub.status | lower | replace(' ', '-') }}" style="font-size:0.65rem;">{{ sub.status }}</span></td>
+                            <td style="font-size:0.85rem;">{% if sub.due_date %}{{ sub.due_date.strftime('%d %b') }}{% else %}—{% endif %}</td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    {% if can_manage %}
+                                    <a href="{{ url_for('pm.edit_task', task_id=sub.id) }}" class="btn-action" style="width:26px;height:26px;" title="Edit">
+                                        <i class="fas fa-pen-to-square" style="font-size:0.65rem;"></i>
+                                    </a>
+                                    <form method="POST" action="{{ url_for('pm.delete_task', task_id=sub.id) }}" class="form-delete d-inline">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn-action danger" style="width:26px;height:26px;" title="Delete">
+                                            <i class="fas fa-trash" style="font-size:0.65rem;"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
                         {% else %}
-                        <tr><td colspan="8" class="text-center py-4" style="color:var(--text-secondary);">No tasks yet</td></tr>
+                        <tr><td colspan="9" class="text-center py-4" style="color:var(--text-secondary);">No tasks yet</td></tr>
                         {% endfor %}
                     </tbody>
                     {% if tasks|length > 0 %}
                     <tfoot>
                         <tr class="fw-bold bg-light">
-                            <td colspan="2" class="text-end">Total:</td>
+                            <td colspan="3" class="text-end">Total:</td>
                             <td>{{ project.tasks | map(attribute='estimated_hours') | sum | default(0.0) }} hrs</td>
                             <td class="{% if (project.tasks|map(attribute='actual_hours')|sum) > (project.tasks|map(attribute='estimated_hours')|sum) and (project.tasks|map(attribute='estimated_hours')|sum) > 0 %}text-danger{% endif %}">
                                 {{ project.tasks | map(attribute='actual_hours') | sum | default(0.0) }} hrs

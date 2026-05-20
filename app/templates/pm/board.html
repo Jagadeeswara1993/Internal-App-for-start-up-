@@ -1,0 +1,539 @@
+{% extends "base.html" %}
+{% block title %}Board — {{ project.name }} — Enterprise Portal{% endblock %}
+{% block page_title %}{{ project.name }} — Board{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Kanban Board Styles ──────────────────────────────────────────────── */
+.board-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.board-filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.board-filters select {
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.82rem;
+    font-family: var(--font-family);
+    background: white;
+    color: var(--text-primary);
+    min-width: 140px;
+}
+.board-filters select:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+.view-toggle {
+    display: inline-flex;
+    border: 1.5px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+}
+.view-toggle a {
+    padding: 7px 16px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--text-secondary);
+    background: white;
+    border-right: 1px solid var(--border-color);
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.view-toggle a:last-child { border-right: none; }
+.view-toggle a:hover { background: #f1f5f9; color: var(--text-primary); }
+.view-toggle a.active {
+    background: var(--primary);
+    color: white;
+}
+
+/* ── Board Layout ─────────────────────────────────────────────────────── */
+.kanban-board {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    min-height: calc(100vh - 260px);
+    align-items: flex-start;
+}
+.kanban-column {
+    min-width: 310px;
+    max-width: 340px;
+    flex: 1;
+    background: #f1f5f9;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+}
+.kanban-column-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid transparent;
+}
+.kanban-column-header h6 {
+    margin: 0;
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.kanban-column-header .col-count {
+    background: rgba(0,0,0,0.08);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+.kanban-column[data-status="Pending"] .kanban-column-header {
+    border-bottom-color: #f59e0b;
+}
+.kanban-column[data-status="Pending"] .kanban-column-header h6 {
+    color: #b45309;
+}
+.kanban-column[data-status="In Progress"] .kanban-column-header {
+    border-bottom-color: #0ea5e9;
+}
+.kanban-column[data-status="In Progress"] .kanban-column-header h6 {
+    color: #0369a1;
+}
+.kanban-column[data-status="Done"] .kanban-column-header {
+    border-bottom-color: #10b981;
+}
+.kanban-column[data-status="Done"] .kanban-column-header h6 {
+    color: #047857;
+}
+
+/* ── Cards Container ──────────────────────────────────────────────────── */
+.kanban-cards {
+    padding: 8px 10px 16px;
+    flex: 1;
+    min-height: 120px;
+    transition: background 0.2s ease;
+}
+.kanban-cards.drag-over {
+    background: rgba(99,102,241,0.06);
+    border-radius: 0 0 12px 12px;
+}
+
+/* ── Individual Card ──────────────────────────────────────────────────── */
+.kanban-card {
+    background: white;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    border: 1px solid var(--border-color);
+    cursor: grab;
+    transition: all 0.2s ease;
+    position: relative;
+}
+.kanban-card:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+    border-color: var(--primary-light);
+}
+.kanban-card:active { cursor: grabbing; }
+.kanban-card.sortable-ghost {
+    opacity: 0.4;
+    background: rgba(99,102,241,0.08);
+}
+.kanban-card.sortable-chosen {
+    box-shadow: 0 8px 24px rgba(99,102,241,0.2);
+}
+
+/* Card inner elements */
+.kanban-card .card-epic-label {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: white;
+}
+.kanban-card .card-title {
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1.35;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+.kanban-card .task-type-icon {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    margin-top: 1px;
+}
+.task-type-icon.type-story   { background: #dbeafe; color: #2563eb; }
+.task-type-icon.type-bug     { background: #fee2e2; color: #dc2626; }
+.task-type-icon.type-task    { background: #d1fae5; color: #059669; }
+.task-type-icon.type-sub-task { background: #e0e7ff; color: #4f46e5; }
+
+.kanban-card .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+}
+.kanban-card .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+.kanban-card .card-meta .priority-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.priority-dot.p-low      { background: #10b981; }
+.priority-dot.p-medium   { background: #0ea5e9; }
+.priority-dot.p-high     { background: #f59e0b; }
+.priority-dot.p-critical { background: #ef4444; }
+
+.kanban-card .card-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.kanban-card .subtask-indicator {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.kanban-card .subtask-indicator i { font-size: 0.65rem; }
+
+/* ── Toast Notification ───────────────────────────────────────────────── */
+.board-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--text-primary);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+    z-index: 9999;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+.board-toast.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+.board-toast.toast-success { border-left: 4px solid #10b981; }
+.board-toast.toast-error   { border-left: 4px solid #ef4444; }
+
+/* ── Empty column state ───────────────────────────────────────────────── */
+.kanban-empty {
+    text-align: center;
+    padding: 32px 16px;
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+.kanban-empty i { font-size: 1.5rem; margin-bottom: 8px; display: block; opacity: 0.4; }
+
+@media (max-width: 768px) {
+    .kanban-board { flex-direction: column; }
+    .kanban-column { min-width: 100%; max-width: 100%; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Toolbar -->
+<div class="board-toolbar">
+    <div class="d-flex align-items-center gap-3">
+        <a href="{{ url_for('pm.project_detail', project_id=project.id) }}" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i>Project Details
+        </a>
+        <div class="view-toggle">
+            <a href="{{ url_for('pm.project_detail', project_id=project.id) }}">
+                <i class="fas fa-table-list"></i> Table
+            </a>
+            <a href="{{ url_for('pm.board_view', project_id=project.id) }}" class="active">
+                <i class="fas fa-columns"></i> Board
+            </a>
+        </div>
+    </div>
+    <div class="board-filters">
+        <select id="filter-epic" title="Filter by Epic">
+            <option value="">All Epics</option>
+            {% for e in epics %}
+            <option value="{{ e.id }}">{{ e.title }}</option>
+            {% endfor %}
+        </select>
+        <select id="filter-assignee" title="Filter by Assignee">
+            <option value="">All Assignees</option>
+            {% for m in members %}
+            <option value="{{ m.user.full_name }}">{{ m.user.full_name }}</option>
+            {% endfor %}
+        </select>
+        <select id="filter-priority" title="Filter by Priority">
+            <option value="">All Priorities</option>
+            <option value="Critical">Critical</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+        </select>
+        {% if can_manage %}
+        <a href="{{ url_for('pm.add_task', project_id=project.id) }}" class="btn btn-primary btn-sm">
+            <i class="fas fa-plus me-1"></i>Add Task
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Kanban Board -->
+<div class="kanban-board" id="kanban-board">
+    {% for status in ['Pending', 'In Progress', 'Done'] %}
+    <div class="kanban-column" data-status="{{ status }}">
+        <div class="kanban-column-header">
+            <h6>
+                {% if status == 'Pending' %}<i class="fas fa-clock"></i>
+                {% elif status == 'In Progress' %}<i class="fas fa-spinner"></i>
+                {% else %}<i class="fas fa-check-circle"></i>{% endif %}
+                {{ status }}
+            </h6>
+            <span class="col-count" id="count-{{ status | lower | replace(' ', '-') }}">0</span>
+        </div>
+        <div class="kanban-cards" id="col-{{ status | lower | replace(' ', '-') }}" data-status="{{ status }}">
+            <!-- Cards loaded dynamically -->
+            <div class="kanban-empty" id="empty-{{ status | lower | replace(' ', '-') }}">
+                <i class="fas fa-inbox"></i>
+                No tasks
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Toast -->
+<div class="board-toast" id="board-toast"></div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- SortableJS CDN -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+<script>
+(function() {
+    const PROJECT_ID = {{ project.id }};
+    const BOARD_API  = `/pm/api/projects/${PROJECT_ID}/board`;
+    const CSRF_TOKEN = '{{ csrf_token() }}';
+    let allCards = {};  // status → card array (cached for filtering)
+
+    // ── Toast helper ──────────────────────────────────────────────────
+    function showToast(message, type) {
+        const t = document.getElementById('board-toast');
+        t.textContent = message;
+        t.className = 'board-toast show toast-' + (type || 'success');
+        setTimeout(() => t.classList.remove('show'), 2500);
+    }
+
+    // ── Task type icon ────────────────────────────────────────────────
+    function typeIcon(type) {
+        const map = {
+            'Story': '<span class="task-type-icon type-story"><i class="fas fa-bookmark"></i></span>',
+            'Bug':   '<span class="task-type-icon type-bug"><i class="fas fa-bug"></i></span>',
+            'Task':  '<span class="task-type-icon type-task"><i class="fas fa-check-square"></i></span>',
+            'Sub-task': '<span class="task-type-icon type-sub-task"><i class="fas fa-indent"></i></span>'
+        };
+        return map[type] || map['Task'];
+    }
+
+    // ── Render a single card ──────────────────────────────────────────
+    function renderCard(card) {
+        let epicHtml = '';
+        if (card.epic) {
+            epicHtml = `<div class="card-epic-label" style="background:${card.epic.color}">${card.epic.title}</div>`;
+        }
+        let subtaskHtml = '';
+        if (card.subtask_count > 0) {
+            subtaskHtml = `<span class="subtask-indicator"><i class="fas fa-sitemap"></i> ${card.subtask_done}/${card.subtask_count}</span>`;
+        }
+        let avatarHtml = '';
+        if (card.assignee_initial) {
+            avatarHtml = `<div class="card-avatar" title="${card.assignee}">${card.assignee_initial}</div>`;
+        }
+        let dueHtml = card.due_date ? `<span><i class="fas fa-calendar-day me-1"></i>${card.due_date}</span>` : '';
+
+        return `
+        <div class="kanban-card" data-id="${card.id}"
+             data-epic-id="${card.epic ? card.epic.id : ''}"
+             data-assignee="${card.assignee}"
+             data-priority="${card.priority}"
+             data-type="${card.task_type}">
+            ${epicHtml}
+            <div class="card-title">
+                ${typeIcon(card.task_type)}
+                <span>${card.title}</span>
+            </div>
+            <div class="card-footer">
+                <div class="card-meta">
+                    <span class="priority-dot p-${card.priority.toLowerCase()}"></span>
+                    <span>${card.priority}</span>
+                    ${dueHtml}
+                    ${subtaskHtml}
+                </div>
+                ${avatarHtml}
+            </div>
+        </div>`;
+    }
+
+    // ── Load board data ───────────────────────────────────────────────
+    function loadBoard() {
+        fetch(BOARD_API)
+            .then(r => r.json())
+            .then(data => {
+                allCards = data;
+                renderAllColumns(data);
+            })
+            .catch(() => showToast('Failed to load board', 'error'));
+    }
+
+    function renderAllColumns(data) {
+        const epicFilter     = document.getElementById('filter-epic').value;
+        const assigneeFilter = document.getElementById('filter-assignee').value;
+        const priorityFilter = document.getElementById('filter-priority').value;
+
+        ['Pending', 'In Progress', 'Done'].forEach(status => {
+            const slug = status.toLowerCase().replace(' ', '-');
+            const container = document.getElementById('col-' + slug);
+            const emptyEl   = document.getElementById('empty-' + slug);
+            const countEl   = document.getElementById('count-' + slug);
+
+            let cards = data[status] || [];
+
+            // Apply filters
+            if (epicFilter)     cards = cards.filter(c => c.epic && String(c.epic.id) === epicFilter);
+            if (assigneeFilter) cards = cards.filter(c => c.assignee === assigneeFilter);
+            if (priorityFilter) cards = cards.filter(c => c.priority === priorityFilter);
+
+            // Clear existing cards (keep empty div)
+            container.querySelectorAll('.kanban-card').forEach(el => el.remove());
+
+            if (cards.length === 0) {
+                emptyEl.style.display = 'block';
+            } else {
+                emptyEl.style.display = 'none';
+                cards.forEach(card => {
+                    container.insertAdjacentHTML('beforeend', renderCard(card));
+                });
+            }
+            countEl.textContent = cards.length;
+        });
+    }
+
+    // ── Drag-drop via SortableJS ──────────────────────────────────────
+    function initSortable() {
+        document.querySelectorAll('.kanban-cards').forEach(col => {
+            Sortable.create(col, {
+                group: 'board',
+                animation: 200,
+                ghostClass: 'sortable-ghost',
+                chosenClass: 'sortable-chosen',
+                dragClass: 'sortable-drag',
+                filter: '.kanban-empty',
+                onEnd: function(evt) {
+                    const cardEl   = evt.item;
+                    const taskId   = cardEl.getAttribute('data-id');
+                    const newStatus = evt.to.getAttribute('data-status');
+
+                    if (!taskId || !newStatus) return;
+
+                    // Hide empty states
+                    evt.to.querySelector('.kanban-empty').style.display = 'none';
+                    if (evt.from.querySelectorAll('.kanban-card').length === 0) {
+                        evt.from.querySelector('.kanban-empty').style.display = 'block';
+                    }
+
+                    // Update counts
+                    updateCounts();
+
+                    // AJAX PATCH
+                    fetch(`/pm/api/tasks/${taskId}/status`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': CSRF_TOKEN
+                        },
+                        body: JSON.stringify({ status: newStatus })
+                    })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            showToast(`Task moved to ${newStatus}`, 'success');
+                        } else {
+                            showToast(data.error || 'Update failed', 'error');
+                            loadBoard(); // revert
+                        }
+                    })
+                    .catch(() => {
+                        showToast('Network error — reverting', 'error');
+                        loadBoard();
+                    });
+                }
+            });
+        });
+    }
+
+    function updateCounts() {
+        ['pending', 'in-progress', 'done'].forEach(slug => {
+            const container = document.getElementById('col-' + slug);
+            const count = container.querySelectorAll('.kanban-card').length;
+            document.getElementById('count-' + slug).textContent = count;
+        });
+    }
+
+    // ── Filter events ─────────────────────────────────────────────────
+    document.getElementById('filter-epic').addEventListener('change', () => renderAllColumns(allCards));
+    document.getElementById('filter-assignee').addEventListener('change', () => renderAllColumns(allCards));
+    document.getElementById('filter-priority').addEventListener('change', () => renderAllColumns(allCards));
+
+    // ── Init ──────────────────────────────────────────────────────────
+    loadBoard();
+    initSortable();
+})();
+</script>
+{% endblock %}

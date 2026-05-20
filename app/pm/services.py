@@ -1,6 +1,6 @@
 from datetime import datetime
 from app.extensions import db
-from app.models import Project, Task, Milestone, ProjectMember, Timesheet
+from app.models import Project, Task, Milestone, ProjectMember, Timesheet, Epic
 from app.utils.audit import log_audit
 from app.pm.routes.helpers import notify
 
@@ -54,10 +54,45 @@ def update_project(project, data, updater_id, is_admin=False):
     return project
 
 # ===========================================================================
+# EPIC SERVICES
+# ===========================================================================
+def create_epic(data, creator_id):
+    """Create a new epic."""
+    epic = Epic(
+        project_id=data.get('project_id'),
+        title=data.get('title').strip(),
+        description=data.get('description', ''),
+        status=data.get('status', 'To Do'),
+        color_label=data.get('color_label', '#6366f1')
+    )
+    db.session.add(epic)
+    db.session.flush()
+
+    project = Project.query.get(epic.project_id)
+    log_audit(creator_id, 'CREATE', 'Epic', epic.id,
+              f'Created epic "{epic.title}" in project "{project.name}"')
+    return epic
+
+def update_epic(epic, data, updater_id):
+    """Update an existing epic."""
+    epic.title = data.get('title', epic.title).strip()
+    epic.description = data.get('description', epic.description)
+    epic.status = data.get('status', epic.status)
+    epic.color_label = data.get('color_label', epic.color_label)
+
+    log_audit(updater_id, 'UPDATE', 'Epic', epic.id, f'Updated epic "{epic.title}"')
+    return epic
+
+# ===========================================================================
 # TASK SERVICES
 # ===========================================================================
 def create_task(data, creator_id):
     """Create a new task and notify the assignee."""
+    task_type = data.get('task_type', 'Task')
+    parent_task_id = data.get('parent_task_id')
+    if parent_task_id:
+        task_type = 'Sub-task'
+
     task = Task(
         project_id=data.get('project_id'),
         title=data.get('title'),
@@ -67,7 +102,10 @@ def create_task(data, creator_id):
         status='Pending',
         due_date=data.get('due_date'),
         estimated_hours=data.get('estimated_hours', 0.0),
-        milestone_id=data.get('milestone_id')
+        milestone_id=data.get('milestone_id'),
+        epic_id=data.get('epic_id'),
+        parent_task_id=parent_task_id,
+        task_type=task_type
     )
     db.session.add(task)
     db.session.flush()
@@ -99,6 +137,14 @@ def update_task(task, data, updater_id):
         task.estimated_hours = data.get('estimated_hours')
     if 'milestone_id' in data:
         task.milestone_id = data.get('milestone_id')
+    if 'epic_id' in data:
+        task.epic_id = data.get('epic_id')
+    if 'parent_task_id' in data:
+        task.parent_task_id = data.get('parent_task_id')
+        if task.parent_task_id:
+            task.task_type = 'Sub-task'
+    if 'task_type' in data and not task.parent_task_id:
+        task.task_type = data.get('task_type', task.task_type)
 
     log_audit(updater_id, 'UPDATE', 'Task', task.id, f'Status: {old_status}→{new_status}')
 
@@ -107,6 +153,47 @@ def update_task(task, data, updater_id):
         notify(task.assigned_to, 'Task Updated',
                f'Task "{task.title}" status changed from {old_status} to {new_status}.',
                category='info', link=f'/pm/projects/{project.id}')
+
+    # Auto-complete parent when all subtasks are Done
+    if new_status == 'Done' and task.parent_task_id:
+        parent = Task.query.get(task.parent_task_id)
+        if parent:
+            all_done = parent.subtasks.filter(Task.status != 'Done').count() == 0
+            if all_done and parent.status != 'Done':
+                parent.status = 'Done'
+                log_audit(updater_id, 'AUTO_COMPLETE', 'Task', parent.id,
+                          f'Auto-completed parent task "{parent.title}" (all subtasks done)')
+
+    return task
+
+def update_task_status(task_id, new_status, updater_id):
+    """Lightweight status update for Kanban drag-drop."""
+    task = Task.query.get(task_id)
+    if not task:
+        return None
+    old_status = task.status
+    task.status = new_status
+    task.updated_at = datetime.utcnow()
+
+    log_audit(updater_id, 'STATUS_CHANGE', 'Task', task.id,
+              f'Status: {old_status}→{new_status} (board)')
+
+    if task.assigned_to and old_status != new_status:
+        project = Project.query.get(task.project_id)
+        notify(task.assigned_to, 'Task Status Changed',
+               f'Task "{task.title}" moved from {old_status} to {new_status}.',
+               category='info', link=f'/pm/projects/{project.id}')
+
+    # Auto-complete parent when all subtasks are Done
+    if new_status == 'Done' and task.parent_task_id:
+        parent = Task.query.get(task.parent_task_id)
+        if parent:
+            all_done = parent.subtasks.filter(Task.status != 'Done').count() == 0
+            if all_done and parent.status != 'Done':
+                parent.status = 'Done'
+                log_audit(updater_id, 'AUTO_COMPLETE', 'Task', parent.id,
+                          f'Auto-completed parent "{parent.title}"')
+
     return task
 
 def log_task_hours(task, hours, updater_id):

@@ -5,7 +5,7 @@ from flask_login import current_user
 from app.pm import bp
 from app.decorators import module_required
 from app.extensions import db
-from app.models import Project, ProjectMember, Task, Milestone, User, Module
+from app.models import Project, ProjectMember, Task, Milestone, User, Module, Epic
 from app.pm.forms import ProjectForm
 from app.pm.routes.helpers import (_get_user_projects, _is_pm_or_admin,
                                     _can_view_project, log_audit)
@@ -69,15 +69,35 @@ def project_detail(project_id):
     if not _can_view_project(current_user, project):
         abort(403)
     members = ProjectMember.query.filter_by(project_id=project.id).all()
-    tasks = Task.query.filter_by(project_id=project.id).order_by(Task.created_at.desc()).all()
+    # Only show top-level tasks in the table (sub-tasks shown nested)
+    tasks = Task.query.filter_by(project_id=project.id)\
+        .order_by(Task.created_at.desc()).all()
     milestones = Milestone.query.filter_by(project_id=project.id)\
         .order_by(Milestone.deadline.asc().nullslast()).all()
+    epics = Epic.query.filter_by(project_id=project.id)\
+        .order_by(Epic.title).all()
     all_users = User.query.filter_by(is_active_user=True).order_by(User.full_name).all()
     progress = project.progress
     can_manage = _is_pm_or_admin(current_user, project)
     return render_template('pm/project_detail.html', project=project,
                            members=members, tasks=tasks, milestones=milestones,
-                           all_users=all_users, progress=progress, can_manage=can_manage)
+                           epics=epics, all_users=all_users,
+                           progress=progress, can_manage=can_manage)
+
+
+@bp.route('/projects/<int:project_id>/board')
+@module_required('pm')
+def board_view(project_id):
+    """Kanban board view for a project (Jira-style per-project board)."""
+    project = Project.query.get_or_404(project_id)
+    if not _can_view_project(current_user, project):
+        abort(403)
+    epics = Epic.query.filter_by(project_id=project.id).order_by(Epic.title).all()
+    members = ProjectMember.query.filter_by(project_id=project.id).all()
+    can_manage = _is_pm_or_admin(current_user, project)
+    return render_template('pm/board.html', project=project,
+                           epics=epics, members=members,
+                           can_manage=can_manage)
 
 
 @bp.route('/projects/<int:project_id>/edit', methods=['GET', 'POST'])

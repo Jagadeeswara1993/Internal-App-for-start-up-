@@ -33,6 +33,7 @@ class Project(db.Model):
     members = db.relationship('ProjectMember', backref='project', lazy='dynamic', cascade='all, delete-orphan')
     tasks = db.relationship('Task', backref='project', lazy='dynamic', cascade='all, delete-orphan')
     milestones = db.relationship('Milestone', backref='project', lazy='dynamic', cascade='all, delete-orphan')
+    epics = db.relationship('Epic', backref='project', lazy='dynamic', cascade='all, delete-orphan')
 
     @property
     def progress(self):
@@ -89,14 +90,38 @@ class ProjectMember(db.Model):
 
 
 # ---------------------------------------------------------------------------
-# Task — UPGRADED with updated_at tracking
+# Epic — NEW (Jira-inspired grouping for tasks)
 # ---------------------------------------------------------------------------
+class Epic(db.Model):
+    __tablename__ = 'epics'
 
+    id          = db.Column(db.Integer, primary_key=True)
+    project_id  = db.Column(db.Integer, db.ForeignKey('projects.id', ondelete='CASCADE'), nullable=False)
+    title       = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, default='')
+    status      = db.Column(db.String(30), default='To Do')   # To Do, In Progress, Done
+    color_label = db.Column(db.String(7), default='#6366f1')   # hex color for board swimlane
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    tasks       = db.relationship('Task', backref='epic', lazy='dynamic')
+
+    __table_args__ = (db.UniqueConstraint('project_id', 'title', name='uq_project_epic'),)
+
+    @property
+    def progress(self):
+        total = self.tasks.count()
+        if total == 0:
+            return 0
+        done = self.tasks.filter_by(status='Done').count()
+        return round((done / total) * 100)
+
+    def __repr__(self):
+        return f'<Epic {self.title}>'
 
 
 # ---------------------------------------------------------------------------
-# Task — UPGRADED with updated_at tracking
+# Task — UPGRADED with hierarchy (Epic + Sub-tasks) and task_type
 # ---------------------------------------------------------------------------
 class Task(db.Model):
     __tablename__ = 'tasks'
@@ -112,10 +137,23 @@ class Task(db.Model):
     actual_hours = db.Column(db.Float, default=0.0)          # Employee's actual spent hours
     due_date = db.Column(db.Date, nullable=True)
     milestone_id = db.Column(db.Integer, db.ForeignKey('milestones.id'), nullable=True)
+    # ── NEW: Hierarchy fields ──
+    epic_id = db.Column(db.Integer, db.ForeignKey('epics.id', ondelete='SET NULL'), nullable=True)
+    parent_task_id = db.Column(db.Integer, db.ForeignKey('tasks.id', ondelete='SET NULL'), nullable=True)
+    task_type = db.Column(db.String(20), default='Task')     # Task, Story, Bug, Sub-task
+    # ──────────────────────────
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     milestone = db.relationship('Milestone', backref=db.backref('tasks', lazy='dynamic'))
+    subtasks = db.relationship('Task',
+                               backref=db.backref('parent_task', remote_side='Task.id'),
+                               lazy='dynamic')
+
+    @property
+    def is_parent(self):
+        """Check if this task has sub-tasks."""
+        return self.subtasks.count() > 0
 
     def __repr__(self):
         return f'<Task {self.title}>'

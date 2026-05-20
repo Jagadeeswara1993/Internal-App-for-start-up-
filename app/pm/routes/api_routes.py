@@ -7,7 +7,7 @@ from app.pm import bp
 from app.decorators import module_required
 from app.extensions import db
 from app.models import (Project, Task, Milestone, ProjectMember, User,
-                        Notification, Timesheet)
+                        Notification, Timesheet, Epic)
 from app.pm.routes.helpers import (_get_user_projects, _is_pm_or_admin,
                                     _can_view_project, log_audit)
 from app.pm import services
@@ -58,7 +58,10 @@ def api_project_tasks(project_id):
         'id': t.id, 'title': t.title, 'status': t.status, 'priority': t.priority,
         'assigned_to': User.query.get(t.assigned_to).full_name if t.assigned_to else 'Unassigned',
         'due_date': str(t.due_date or ''), 'estimated_hours': t.estimated_hours or 0,
-        'actual_hours': t.actual_hours or 0
+        'actual_hours': t.actual_hours or 0,
+        'task_type': t.task_type or 'Task',
+        'epic_id': t.epic_id,
+        'parent_task_id': t.parent_task_id
     } for t in tasks])
 
 
@@ -85,6 +88,107 @@ def api_project_members(project_id):
     return jsonify([{
         'id': m.id, 'user_id': m.user_id, 'name': m.user.full_name, 'role': m.role
     } for m in members])
+
+
+# ===========================================================================
+# BOARD API — Kanban drag-drop
+# ===========================================================================
+@bp.route('/api/projects/<int:project_id>/board')
+@module_required('pm')
+def api_board(project_id):
+    """Return tasks grouped by status for the Kanban board."""
+    project = Project.query.get_or_404(project_id)
+    if not _can_view_project(current_user, project):
+        return jsonify({'error': 'Forbidden'}), 403
+
+    # Only show top-level tasks on the board (sub-tasks are nested inside cards)
+    tasks = Task.query.filter_by(project_id=project.id)\
+        .filter((Task.parent_task_id == None) | (Task.parent_task_id == 0))\
+        .order_by(Task.updated_at.desc()).all()
+
+    columns = {'Pending': [], 'In Progress': [], 'Done': []}
+    for t in tasks:
+        assignee_name = ''
+        assignee_initial = ''
+        if t.assigned_to:
+            u = User.query.get(t.assigned_to)
+            if u:
+                assignee_name = u.full_name
+                assignee_initial = u.full_name[0].upper()
+
+        epic_info = None
+        if t.epic_id:
+            epic = Epic.query.get(t.epic_id)
+            if epic:
+                epic_info = {'id': epic.id, 'title': epic.title, 'color': epic.color_label}
+
+        subtask_count = t.subtasks.count()
+        subtask_done = t.subtasks.filter_by(status='Done').count()
+
+        card = {
+            'id': t.id, 'title': t.title, 'priority': t.priority,
+            'task_type': t.task_type or 'Task',
+            'assignee': assignee_name, 'assignee_initial': assignee_initial,
+            'due_date': t.due_date.strftime('%d %b') if t.due_date else '',
+            'epic': epic_info,
+            'subtask_count': subtask_count,
+            'subtask_done': subtask_done
+        }
+        if t.status in columns:
+            columns[t.status].append(card)
+        else:
+            columns['Pending'].append(card)
+
+    return jsonify(columns)
+
+
+@bp.route('/api/projects/<int:project_id>/epics')
+@module_required('pm')
+def api_project_epics(project_id):
+    """List epics for a project (used by board filters)."""
+    project = Project.query.get_or_404(project_id)
+    if not _can_view_project(current_user, project):
+        return jsonify({'error': 'Forbidden'}), 403
+    epics = Epic.query.filter_by(project_id=project.id).order_by(Epic.title).all()
+    return jsonify([{
+        'id': e.id, 'title': e.title, 'status': e.status,
+        'color': e.color_label, 'progress': e.progress,
+        'task_count': e.tasks.count()
+    } for e in epics])
+
+
+@bp.route('/api/tasks/<int:task_id>/status', methods=['PATCH'])
+@module_required('pm')
+def api_update_task_status(task_id):
+    """Kanban drag-drop: update task status via AJAX."""
+    task = Task.query.get_or_404(task_id)
+    project = task.project
+
+    if not _can_view_project(current_user, project):
+        return jsonify({'error': 'Forbidden'}), 403
+
+    data = request.get_json(silent=True)
+    if not data or 'status' not in data:
+        return jsonify({'error': 'Missing status'}), 400
+
+    new_status = data['status']
+    valid_statuses = ['Pending', 'In Progress', 'Done']
+    if new_status not in valid_statuses:
+        return jsonify({'error': f'Invalid status. Must be one of: {valid_statuses}'}), 400
+
+    updated = services.update_task_status(task.id, new_status, current_user.id)
+    db.session.commit()
+
+    # Auto-update project status
+    project.check_and_update_status()
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'task_id': task.id,
+        'new_status': new_status,
+        'project_progress': project.progress
+    })
 
 
 # ===========================================================================
