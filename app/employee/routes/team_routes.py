@@ -10,6 +10,7 @@ from app.extensions import db
 from app.models import (Employee, Notification, Timesheet, Task,
                         ProjectMember, Project, Leave)
 from app.hr import services
+from app.employee import services as employee_services
 
 
 # ===========================================================================
@@ -32,7 +33,21 @@ def mark_read(notif_id):
     if notif.user_id == current_user.id:
         notif.is_read = True
         db.session.commit()
-    return redirect(notif.link or url_for('employee.notifications'))
+    
+    redirect_url = notif.link or url_for('employee.notifications')
+    # If the employee is being redirected to a PM route they don't have access to,
+    # safely redirect them to the employee tasks/projects equivalent
+    if redirect_url.startswith('/pm/'):
+        if not (current_user.is_admin or current_user.has_module('pm')):
+            if '/projects/' in redirect_url:
+                if 'Project' in notif.title or 'Added' in notif.title:
+                    redirect_url = url_for('employee.projects')
+                else:
+                    redirect_url = url_for('employee.my_tasks')
+            else:
+                redirect_url = url_for('employee.my_tasks')
+                
+    return redirect(redirect_url)
 
 
 @bp.route('/notifications/mark-all-read', methods=['POST'])
@@ -200,7 +215,7 @@ def team_approve_leave(leave_id):
         flash('You are not the reporting manager for this employee.', 'danger')
         return redirect(url_for('employee.team_leaves'))
 
-    success, msg = services.approve_leave(leave_id, current_user.id)
+    success, msg = employee_services.manager_approve_leave(leave_id, emp.id, request.remote_addr or '')
     if success:
         services.log_audit(current_user.id, 'APPROVE', 'Leave', leave_id,
                           msg, request.remote_addr or '')
@@ -222,8 +237,8 @@ def team_reject_leave(leave_id):
         flash('You are not the reporting manager for this employee.', 'danger')
         return redirect(url_for('employee.team_leaves'))
 
-    reason = request.form.get('reason', '').strip()
-    success, msg = services.reject_leave(leave_id, current_user.id, reason)
+    reason = request.form.get('rejection_reason', '').strip()
+    success, msg = employee_services.manager_reject_leave(leave_id, emp.id, reason, request.remote_addr or '')
     if success:
         services.log_audit(current_user.id, 'REJECT', 'Leave', leave_id,
                           msg, request.remote_addr or '')
@@ -232,3 +247,101 @@ def team_reject_leave(leave_id):
     else:
         flash(msg, 'danger')
     return redirect(url_for('employee.team_leaves'))
+
+
+@bp.route('/team/calendar')
+@module_required('employee')
+def team_calendar():
+    """Visual leave calendar for manager's direct reports."""
+    from calendar import monthrange
+    from app.models import Holiday
+    import json
+
+    emp = Employee.query.filter_by(user_id=current_user.id).first_or_404()
+    team_members = Employee.query.filter_by(reporting_manager_id=emp.id).all()
+    team_ids = [e.id for e in team_members]
+
+    if not team_ids:
+        flash('You have no direct reports.', 'info')
+        return redirect(url_for('employee.dashboard'))
+
+    year = request.args.get('year', date.today().year, type=int)
+    month = request.args.get('month', date.today().month, type=int)
+    _, num_days = monthrange(year, month)
+    first_weekday = date(year, month, 1).weekday()
+
+    # Holidays
+    holidays = Holiday.query.filter(
+        db.extract('year', Holiday.holiday_date) == year,
+        db.extract('month', Holiday.holiday_date) == month
+    ).all()
+    holiday_map = {h.holiday_date.day: h.holiday_name for h in holidays}
+
+    # Team leaves
+    month_start = date(year, month, 1)
+    month_end = date(year, month, num_days)
+    approved_leaves = Leave.query.filter(
+        Leave.status == 'Approved',
+        Leave.employee_id.in_(team_ids),
+        Leave.start_date <= month_end,
+        Leave.end_date >= month_start
+    ).all()
+
+    day_absences = defaultdict(list)
+    for lv in approved_leaves:
+        e = Employee.query.get(lv.employee_id)
+        s = max(lv.start_date, month_start)
+        end = min(lv.end_date, month_end)
+        current = s
+        while current <= end:
+            day_absences[current.day].append({
+                'name': e.user.full_name,
+                'emp_code': e.emp_code,
+                'dept': e.department_name,
+                'leave_type': lv.leave_type,
+                'is_half_day': lv.is_half_day
+            })
+            current += timedelta(days=1)
+
+    total_team = len(team_ids)
+    calendar_data = []
+    for day_num in range(1, num_days + 1):
+        d = date(year, month, day_num)
+        is_weekend = d.weekday() >= 5
+        is_holiday = day_num in holiday_map
+        absences = day_absences.get(day_num, [])
+        calendar_data.append({
+            'day': day_num,
+            'weekday': d.strftime('%a'),
+            'is_weekend': is_weekend,
+            'is_holiday': is_holiday,
+            'holiday_name': holiday_map.get(day_num, ''),
+            'is_today': d == date.today(),
+            'absent_count': len(absences),
+            'half_day_count': sum(1 for a in absences if a['is_half_day']),
+            'present_count': max(0, total_team - len(absences)) if not is_weekend and not is_holiday else 0,
+            'absences': absences
+        })
+
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+    if month == 12:
+        next_year, next_month = year + 1, 1
+    else:
+        next_year, next_month = year, month + 1
+
+    month_name = date(year, month, 1).strftime('%B %Y')
+
+    return render_template('employee/team_calendar.html',
+                           calendar_data=calendar_data,
+                           calendar_json=json.dumps(calendar_data),
+                           first_weekday=first_weekday,
+                           month_name=month_name,
+                           year=year, month=month,
+                           prev_year=prev_year, prev_month=prev_month,
+                           next_year=next_year, next_month=next_month,
+                           total_team=total_team,
+                           employee=emp)
+

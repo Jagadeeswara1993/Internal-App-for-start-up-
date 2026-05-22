@@ -4,8 +4,8 @@
 
 {% block content %}
 <div class="mb-3">
-    <a href="{{ url_for('employee.my_timesheets') }}" class="btn btn-outline-primary btn-sm">
-        <i class="fas fa-arrow-left me-1"></i>Back to Timesheets
+    <a href="{{ next_url or url_for('employee.my_timesheets') }}" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Back
     </a>
 </div>
 
@@ -15,6 +15,9 @@
             <h5 class="fw-bold mb-4"><i class="fas fa-clock me-2" style="color:var(--primary);"></i>Log Work Hours</h5>
             <form method="POST" novalidate>
                 {{ form.hidden_tag() }}
+                {% if next_url %}
+                <input type="hidden" name="next" value="{{ next_url }}">
+                {% endif %}
                 <div class="row g-3">
                     <div class="col-md-12">
                         {{ form.project_id.label(class="form-label") }}
@@ -57,7 +60,7 @@
                 <hr class="my-4">
                 <div class="d-flex gap-2">
                     {{ form.submit(class="btn btn-primary") }}
-                    <a href="{{ url_for('employee.my_timesheets') }}" class="btn btn-outline-secondary">Cancel</a>
+                    <a href="{{ next_url or url_for('employee.my_timesheets') }}" class="btn btn-outline-secondary">Cancel</a>
                 </div>
             </form>
         </div>

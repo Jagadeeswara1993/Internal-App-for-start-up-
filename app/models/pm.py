@@ -110,24 +110,55 @@ class Epic(db.Model):
 
     @property
     def progress(self):
-        """Calculate progress counting ALL tasks in the hierarchy (parents + subtasks)."""
+        """Calculate progress using hour-weighted Earned Value logic:
+        - Standalone tasks and subtasks are counted (parent container tasks are excluded to avoid double-counting).
+        - If a task is Done: it contributes its full estimated hours.
+        - If a task is In Progress/Pending: it contributes its actual hours worked (capped at estimated hours).
+        - Falls back to count-based progress if total estimated hours is 0.
+        """
         from sqlalchemy import or_
-        # Count all tasks that belong to this epic (directly or via parent)
-        direct_task_ids = [t.id for t in self.tasks]
+        # Get direct tasks belonging to the epic
+        direct_tasks = self.tasks.all()
+        direct_task_ids = [t.id for t in direct_tasks]
         if not direct_task_ids:
             return 0
-        # Also count subtasks whose parent belongs to this epic
+            
+        # Get all tasks and subtasks associated with this epic
         all_tasks = Task.query.filter(
             or_(
                 Task.epic_id == self.id,
                 Task.parent_task_id.in_(direct_task_ids)
             )
         ).all()
-        total = len(all_tasks)
-        if total == 0:
+        
+        if not all_tasks:
             return 0
-        done = sum(1 for t in all_tasks if t.status == 'Done')
-        return round((done / total) * 100)
+            
+        # Filter to leaf tasks only (exclude parent tasks that have subtasks)
+        leaf_tasks = [t for t in all_tasks if not t.is_parent]
+        if not leaf_tasks:
+            return 0
+            
+        total_estimated = sum(t.estimated_hours or 0.0 for t in leaf_tasks)
+        
+        # Fallback to count-based calculation if there are no estimated hours defined
+        if total_estimated == 0.0:
+            done_count = sum(1 for t in leaf_tasks if t.status == 'Done')
+            return round((done_count / len(leaf_tasks)) * 100)
+            
+        completed_hours = 0.0
+        for t in leaf_tasks:
+            est = t.estimated_hours or 0.0
+            act = t.actual_hours or 0.0
+            if t.status == 'Done':
+                # Earn full estimate
+                completed_hours += est
+            else:
+                # Earn actual hours, capped at estimated hours to prevent over-progress
+                completed_hours += min(act, est)
+                
+        return min(100, round((completed_hours / total_estimated) * 100))
+
 
     def check_and_update_status(self):
         """Auto-update epic status based on task completion.

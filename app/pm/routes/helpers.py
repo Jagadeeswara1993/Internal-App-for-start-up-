@@ -30,6 +30,18 @@ def _can_view_project(user, project):
 
 def notify(user_id, title, message, category='info', link=''):
     """Create a notification for a user."""
+    from app.models import User
+    user = User.query.get(user_id)
+    if user and link.startswith('/pm/'):
+        # If the user does not have pm access, redirect them to the employee equivalent
+        if not (user.is_admin or user.has_module('pm')):
+            if '/projects/' in link:
+                if 'Project' in title or 'Added' in title:
+                    link = '/employee/projects'
+                else:
+                    link = '/employee/tasks'
+            else:
+                link = '/employee/tasks'
     n = Notification(user_id=user_id, title=title, message=message,
                      category=category, link=link)
     db.session.add(n)

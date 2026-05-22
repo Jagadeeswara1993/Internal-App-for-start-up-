@@ -52,7 +52,7 @@
                         {{ task.due_date.strftime('%d %b %Y') if task.due_date else '—' }}
                     </td>
                     <td>
-                        <a href="{{ url_for('employee.submit_timesheet') }}" class="btn-action primary" title="Log Hours via Timesheet">
+                        <a href="{{ url_for('employee.submit_timesheet', project_id=task.project_id, task_id=task.id, next=request.path) }}" class="btn-action primary" title="Log Hours via Timesheet">
                             <i class="fas fa-clock"></i>
                         </a>
                     </td>

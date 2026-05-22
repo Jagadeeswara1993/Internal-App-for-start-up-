@@ -1,12 +1,15 @@
 """HR leave management routes."""
 
-from datetime import date, datetime
+import json
+from calendar import monthrange
+from collections import defaultdict
+from datetime import date, datetime, timedelta
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import current_user
 from app.hr import bp
 from app.decorators import module_required
 from app.extensions import db
-from app.models import Employee, Leave, LeavePolicy, Notification
+from app.models import Employee, Leave, LeavePolicy, Notification, Holiday, Department
 from app.hr.forms import LeaveActionForm
 from app.hr import services
 
@@ -100,3 +103,109 @@ def cancel_leave(leave_id):
     db.session.commit()
     flash(f'Leave cancelled and balance restored.', 'warning')
     return redirect(url_for('hr.leaves'))
+
+
+@bp.route('/leave-calendar')
+@module_required('hr')
+def leave_calendar():
+    """Visual month-grid leave calendar for the entire organization."""
+    year = request.args.get('year', date.today().year, type=int)
+    month = request.args.get('month', date.today().month, type=int)
+    dept_filter = request.args.get('department', 0, type=int)
+
+    departments = Department.query.filter_by(is_active=True).order_by(Department.name).all()
+
+    # Compute calendar grid data
+    _, num_days = monthrange(year, month)
+    first_weekday = date(year, month, 1).weekday()  # 0=Mon
+
+    # Holidays this month
+    holidays = Holiday.query.filter(
+        db.extract('year', Holiday.holiday_date) == year,
+        db.extract('month', Holiday.holiday_date) == month
+    ).all()
+    holiday_map = {h.holiday_date.day: h.holiday_name for h in holidays}
+
+    # Approved leaves this month
+    month_start = date(year, month, 1)
+    month_end = date(year, month, num_days)
+
+    leave_query = Leave.query.filter(
+        Leave.status == 'Approved',
+        Leave.start_date <= month_end,
+        Leave.end_date >= month_start
+    )
+    if dept_filter:
+        leave_query = leave_query.join(Employee).filter(Employee.department_id == dept_filter)
+    approved_leaves = leave_query.all()
+
+    # Build day -> list of absent employees
+    day_absences = defaultdict(list)
+    for lv in approved_leaves:
+        emp = lv.employee
+        s = max(lv.start_date, month_start)
+        e = min(lv.end_date, month_end)
+        current = s
+        while current <= e:
+            day_absences[current.day].append({
+                'name': emp.user.full_name,
+                'emp_code': emp.emp_code,
+                'dept': emp.department_name,
+                'leave_type': lv.leave_type,
+                'is_half_day': lv.is_half_day
+            })
+            current += timedelta(days=1)
+
+    # Employee count for "present" calculation
+    emp_query = Employee.query.filter_by(is_active=True)
+    if dept_filter:
+        emp_query = emp_query.filter_by(department_id=dept_filter)
+    total_employees = emp_query.count()
+
+    # Build calendar data
+    calendar_data = []
+    for day in range(1, num_days + 1):
+        d = date(year, month, day)
+        is_weekend = d.weekday() >= 5
+        is_holiday = day in holiday_map
+        absences = day_absences.get(day, [])
+        absent_count = len(absences)
+        half_day_count = sum(1 for a in absences if a['is_half_day'])
+
+        calendar_data.append({
+            'day': day,
+            'weekday': d.strftime('%a'),
+            'is_weekend': is_weekend,
+            'is_holiday': is_holiday,
+            'holiday_name': holiday_map.get(day, ''),
+            'is_today': d == date.today(),
+            'absent_count': absent_count,
+            'half_day_count': half_day_count,
+            'present_count': max(0, total_employees - absent_count) if not is_weekend and not is_holiday else 0,
+            'absences': absences
+        })
+
+    # Month navigation
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+    if month == 12:
+        next_year, next_month = year + 1, 1
+    else:
+        next_year, next_month = year, month + 1
+
+    month_name = date(year, month, 1).strftime('%B %Y')
+
+    return render_template('hr/leave_calendar.html',
+                           calendar_data=calendar_data,
+                           calendar_json=json.dumps(calendar_data),
+                           first_weekday=first_weekday,
+                           month_name=month_name,
+                           year=year, month=month,
+                           prev_year=prev_year, prev_month=prev_month,
+                           next_year=next_year, next_month=next_month,
+                           departments=departments,
+                           selected_dept=dept_filter,
+                           total_employees=total_employees)
+

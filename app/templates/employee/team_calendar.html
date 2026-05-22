@@ -1,0 +1,433 @@
+{% extends "base.html" %}
+{% block title %}Team Leave Calendar — Enterprise Portal{% endblock %}
+{% block page_title %}Team Leave Calendar{% endblock %}
+
+{% block content %}
+<style>
+    .calendar-container {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 12px;
+        margin-top: 15px;
+    }
+    .calendar-header-day {
+        text-align: center;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        padding: 8px 0;
+        background-color: rgba(0, 0, 0, 0.02);
+        border-radius: 6px;
+    }
+    .calendar-day-cell {
+        min-height: 110px;
+        background: #fff;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        border-radius: 8px;
+        padding: 10px;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: all 0.2s ease-in-out;
+        cursor: pointer;
+    }
+    .calendar-day-cell:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    .calendar-day-cell.empty {
+        background: rgba(0, 0, 0, 0.01);
+        border-color: rgba(0, 0, 0, 0.03);
+        cursor: default;
+        pointer-events: none;
+    }
+    .day-number {
+        font-size: 1.1rem;
+        font-weight: 700;
+        line-height: 1;
+        margin-bottom: 5px;
+    }
+    .calendar-day-cell.today {
+        border: 2px solid #4f46e5 !important;
+        box-shadow: 0 0 10px rgba(79, 70, 229, 0.15);
+    }
+    .calendar-day-cell.today .day-number {
+        color: #4f46e5;
+    }
+
+    /* Colors and states */
+    .state-present {
+        background-color: rgba(16, 185, 129, 0.03);
+        border-color: rgba(16, 185, 129, 0.15);
+    }
+    .state-present:hover {
+        background-color: rgba(16, 185, 129, 0.06);
+    }
+    .state-leave {
+        background-color: rgba(239, 68, 68, 0.04);
+        border-color: rgba(239, 68, 68, 0.18);
+    }
+    .state-leave:hover {
+        background-color: rgba(239, 68, 68, 0.08);
+    }
+    .state-halfday {
+        background-color: rgba(245, 158, 11, 0.04);
+        border-color: rgba(245, 158, 11, 0.18);
+    }
+    .state-halfday:hover {
+        background-color: rgba(245, 158, 11, 0.08);
+    }
+    .state-holiday {
+        background-color: rgba(99, 102, 241, 0.04);
+        border-color: rgba(99, 102, 241, 0.18);
+    }
+    .state-holiday:hover {
+        background-color: rgba(99, 102, 241, 0.08);
+    }
+    .state-weekend {
+        background-color: rgba(241, 245, 249, 0.5);
+        border-color: rgba(226, 232, 240, 0.7);
+        color: #64748b;
+    }
+
+    /* Badge indicators */
+    .badge-present {
+        background-color: rgba(16, 185, 129, 0.1);
+        color: #059669;
+        font-size: 0.72rem;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-absent {
+        background-color: rgba(239, 68, 68, 0.1);
+        color: #dc2626;
+        font-size: 0.72rem;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-halfday-ind {
+        background-color: rgba(245, 158, 11, 0.1);
+        color: #d97706;
+        font-size: 0.72rem;
+        padding: 3px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+        display: inline-block;
+    }
+    .badge-holiday-ind {
+        background-color: rgba(99, 102, 241, 0.1);
+        color: #4f46e5;
+        font-size: 0.7rem;
+        padding: 2px 5px;
+        border-radius: 4px;
+        font-weight: 600;
+        display: inline-block;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
+    }
+
+    /* Legend */
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.82rem;
+        font-weight: 500;
+    }
+    .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+
+    /* Responsive */
+    @media (max-width: 991px) {
+        .calendar-container {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        .calendar-header-day {
+            display: none;
+        }
+    }
+    @media (max-width: 575px) {
+        .calendar-container {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
+    <div>
+        <h4 style="font-weight:700; margin:0;"><i class="fas fa-calendar-alt me-2" style="color:var(--primary);"></i>Team Leave Calendar</h4>
+        <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Visual view of leaves and availability for your direct reports</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('employee.team_leaves') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-list me-1"></i>List Requests
+        </a>
+        <a href="{{ url_for('employee.my_team') }}" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-users me-1"></i>My Team
+        </a>
+    </div>
+</div>
+
+<!-- Controls Panel -->
+<div class="data-card mb-4" style="padding: 16px 20px;">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <!-- Month Navigation -->
+        <div class="d-flex align-items-center gap-3">
+            <div class="btn-group">
+                <a href="{{ url_for('employee.team_calendar', year=prev_year, month=prev_month) }}" class="btn btn-outline-secondary btn-sm" title="Previous Month">
+                    <i class="fas fa-chevron-left"></i>
+                </a>
+                <a href="{{ url_for('employee.team_calendar') }}" class="btn btn-outline-secondary btn-sm">
+                    Today
+                </a>
+                <a href="{{ url_for('employee.team_calendar', year=next_year, month=next_month) }}" class="btn btn-outline-secondary btn-sm" title="Next Month">
+                    <i class="fas fa-chevron-right"></i>
+                </a>
+            </div>
+            <h5 style="margin:0; font-weight:700; color:#1e293b; white-space:nowrap;">{{ month_name }}</h5>
+        </div>
+        <div class="text-secondary" style="font-size: 0.85rem; font-weight: 500;">
+            <i class="fas fa-users me-1"></i>Total Direct Reports: <strong>{{ total_team }}</strong>
+        </div>
+    </div>
+</div>
+
+<!-- Calendar Legend -->
+<div class="data-card mb-4" style="padding: 12px 20px; background-color: rgba(255,255,255,0.6);">
+    <div class="d-flex flex-wrap gap-4 align-items-center justify-content-between">
+        <div class="d-flex flex-wrap gap-3">
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #10b981; border: 1px solid rgba(16,185,129,0.3);"></div>
+                <span>Present</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #ef4444; border: 1px solid rgba(239,68,68,0.3);"></div>
+                <span>On Approved Leave</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);"></div>
+                <span>Half-Day Absence</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #6366f1; border: 1px solid rgba(99,102,241,0.3);"></div>
+                <span>Company Holiday</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-dot" style="background-color: #cbd5e1; border: 1px solid rgba(148,163,184,0.3);"></div>
+                <span>Weekend</span>
+            </div>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-secondary); font-weight: 500;">
+            <i class="fas fa-info-circle me-1"></i>Click any day to view details
+        </div>
+    </div>
+</div>
+
+<!-- Calendar Grid -->
+<div class="data-card" style="padding: 20px;">
+    <div class="calendar-container">
+        <!-- Weekdays Headers -->
+        <div class="calendar-header-day">Mon</div>
+        <div class="calendar-header-day">Tue</div>
+        <div class="calendar-header-day">Wed</div>
+        <div class="calendar-header-day">Thu</div>
+        <div class="calendar-header-day">Fri</div>
+        <div class="calendar-header-day" style="color: #64748b;">Sat</div>
+        <div class="calendar-header-day" style="color: #64748b;">Sun</div>
+
+        <!-- Spacers for first weekday -->
+        {% for _ in range(first_weekday) %}
+        <div class="calendar-day-cell empty"></div>
+        {% endfor %}
+
+        <!-- Days -->
+        {% for day in calendar_data %}
+            {% set cell_class = "state-present" %}
+            {% if day.is_weekend %}
+                {% set cell_class = "state-weekend" %}
+            {% elif day.is_holiday %}
+                {% set cell_class = "state-holiday" %}
+            {% elif day.absent_count > 0 %}
+                {% if day.half_day_count == day.absent_count %}
+                    {% set cell_class = "state-halfday" %}
+                {% else %}
+                    {% set cell_class = "state-leave" %}
+                {% endif %}
+            {% endif %}
+
+            <div class="calendar-day-cell {{ cell_class }} {% if day.is_today %}today{% endif %}" 
+                 onclick="showAbsences({{ day.day }})">
+                <div class="d-flex justify-content-between align-items-start">
+                    <span class="day-number">{{ day.day }}</span>
+                    {% if day.is_today %}
+                    <span class="badge bg-primary" style="font-size:0.58rem; font-weight: 700; padding: 2px 4px;">TODAY</span>
+                    {% endif %}
+                </div>
+
+                <div class="mt-2 text-start">
+                    {% if day.is_weekend %}
+                        <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">Weekend</span>
+                    {% elif day.is_holiday %}
+                        <span class="badge-holiday-ind" title="{{ day.holiday_name }}">
+                            <i class="fas fa-umbrella-beach me-1"></i>{{ day.holiday_name }}
+                        </span>
+                    {% else %}
+                        {% if day.absent_count > 0 %}
+                            {% if day.half_day_count > 0 %}
+                                <div class="badge-halfday-ind mb-1">
+                                    <i class="fas fa-clock me-1"></i>{{ day.half_day_count }} Half-day
+                                </div>
+                            {% endif %}
+                            {% set full_leaves = day.absent_count - day.half_day_count %}
+                            {% if full_leaves > 0 %}
+                                <div class="badge-absent">
+                                    <i class="fas fa-user-xmark me-1"></i>{{ full_leaves }} Absent
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="badge-present">
+                                <i class="fas fa-user-check me-1"></i>{{ day.present_count }} Present
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Absence Details Modal -->
+<div class="modal fade" id="absenceModal" tabindex="-1" aria-labelledby="absenceModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="border-bottom: 1px solid rgba(0,0,0,0.06); background-color: #f8fafc; border-top-left-radius: 12px; border-top-right-radius: 12px; padding: 16px 20px;">
+                <h6 class="modal-title" id="absenceModalLabel" style="font-weight: 700; color: #1e293b; margin: 0;">Day Details</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div id="modalDayInfo" class="mb-3 text-secondary" style="font-size: 0.85rem; font-weight: 500;"></div>
+                
+                <!-- Present Stats -->
+                <div class="p-3 mb-3 bg-light rounded d-flex justify-content-between align-items-center" style="font-size: 0.85rem;">
+                    <span style="font-weight: 600; color: #475569;">Direct Reports Present</span>
+                    <span id="modalPresentCount" class="badge bg-success" style="font-size: 0.85rem; padding: 4px 8px; font-weight: 700;">-</span>
+                </div>
+
+                <div id="absenceListContainer">
+                    <h6 style="font-weight: 700; font-size: 0.85rem; color: #334155; margin-bottom: 12px;" id="absenceTitle">Team Absences</h6>
+                    <div id="absenceList" class="d-flex flex-column gap-2">
+                        <!-- Filled dynamically -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer" style="border-top: none; padding: 12px 20px;">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal" style="border-radius: 6px;">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Injected calendar JSON data
+    const calendarData = {{ calendar_json | safe }};
+    const monthName = "{{ month_name }}";
+
+    function showAbsences(dayNum) {
+        const dayData = calendarData.find(d => d.day === dayNum);
+        if (!dayData) return;
+
+        // Set title
+        const formattedDate = `${dayData.weekday}, ${dayNum} ${monthName}`;
+        document.getElementById('absenceModalLabel').innerText = formattedDate;
+
+        // Set holiday description if any
+        let infoText = "";
+        if (dayData.is_holiday) {
+            infoText = `🎉 Company Holiday: <strong>${dayData.holiday_name}</strong>`;
+        } else if (dayData.is_weekend) {
+            infoText = "📅 Weekend";
+        } else {
+            infoText = "🏢 Regular Working Day";
+        }
+        document.getElementById('modalDayInfo').innerHTML = infoText;
+
+        // Set present count
+        const presentCountEl = document.getElementById('modalPresentCount');
+        if (dayData.is_weekend || dayData.is_holiday) {
+            presentCountEl.innerText = "0 (Non-working)";
+            presentCountEl.className = "badge bg-secondary";
+        } else {
+            presentCountEl.innerText = dayData.present_count;
+            presentCountEl.className = "badge bg-success";
+        }
+
+        // Set absences list
+        const listContainer = document.getElementById('absenceListContainer');
+        const listEl = document.getElementById('absenceList');
+        const titleEl = document.getElementById('absenceTitle');
+        
+        listEl.innerHTML = "";
+
+        if (dayData.absences.length === 0) {
+            if (dayData.is_weekend || dayData.is_holiday) {
+                listContainer.style.display = "none";
+            } else {
+                listContainer.style.display = "block";
+                titleEl.innerText = "Absences (0)";
+                listEl.innerHTML = `
+                    <div class="text-center py-4 text-muted" style="font-size:0.85rem; background-color: rgba(16,185,129,0.02); border: 1px dashed rgba(16,185,129,0.2); border-radius: 8px;">
+                        <i class="fas fa-face-smile text-success mb-2" style="font-size: 1.5rem;"></i>
+                        <div>100% attendance on your team!</div>
+                    </div>
+                `;
+            }
+        } else {
+            listContainer.style.display = "block";
+            titleEl.innerText = `Team Absences (${dayData.absences.length})`;
+
+            dayData.absences.forEach(abs => {
+                const badgeClass = abs.is_half_day ? "bg-warning text-dark" : "bg-danger text-white";
+                const badgeText = abs.is_half_day ? "Half-Day" : "Full Leave";
+                const leaveIcon = abs.is_half_day ? "fa-clock" : "fa-user-xmark";
+
+                const row = document.createElement('div');
+                row.className = "p-3 rounded border d-flex justify-content-between align-items-center";
+                row.style.borderColor = "rgba(0,0,0,0.06)";
+                row.style.backgroundColor = abs.is_half_day ? "rgba(245,158,11,0.02)" : "rgba(239,68,68,0.02)";
+                
+                row.innerHTML = `
+                    <div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #1e293b;">${abs.name}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                            <span>${abs.emp_code}</span> · <span class="badge bg-light text-dark">${abs.dept}</span>
+                        </div>
+                    </div>
+                    <div class="text-end">
+                        <span class="badge ${badgeClass}" style="font-size:0.7rem; font-weight:700; padding:4px 8px; border-radius:6px;">
+                            <i class="fas ${leaveIcon} me-1"></i>${badgeText}
+                        </span>
+                        <div style="font-size: 0.72rem; color: var(--text-secondary); margin-top: 3px; font-weight:500;">
+                            ${abs.leave_type}
+                        </div>
+                    </div>
+                `;
+                listEl.appendChild(row);
+            });
+        }
+
+        // Show bootstrap modal
+        const modal = new bootstrap.Modal(document.getElementById('absenceModal'));
+        modal.show();
+    }
+</script>
+{% endblock %}

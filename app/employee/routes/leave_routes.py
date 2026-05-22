@@ -61,7 +61,8 @@ def request_leave():
     if form.validate_on_submit():
         if form.end_date.data < form.start_date.data:
             flash('End date must be after start date.', 'danger')
-            return render_template('employee/leave_request.html', form=form, employee=emp)
+            return render_template('employee/leave_request.html', form=form, employee=emp,
+                                   reporting_manager=emp.reporting_manager, leave_balances=balances)
 
         success, msg = services.submit_leave_request(
             employee=emp,
@@ -86,7 +87,8 @@ def request_leave():
             return redirect(url_for('employee.my_leaves'))
         else:
             flash(msg, 'danger')
-    return render_template('employee/leave_request.html', form=form, employee=emp)
+    return render_template('employee/leave_request.html', form=form, employee=emp,
+                           reporting_manager=emp.reporting_manager, leave_balances=balances)
 
 
 @bp.route('/leaves/<int:leave_id>/cancel', methods=['POST'])

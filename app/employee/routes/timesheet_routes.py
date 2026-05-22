@@ -64,6 +64,7 @@ def my_timesheets():
 def submit_timesheet():
     emp = Employee.query.filter_by(user_id=current_user.id).first_or_404()
     form = TimesheetForm()
+    next_url = request.args.get('next') or request.form.get('next') or ''
 
     member_of = ProjectMember.query.filter_by(user_id=current_user.id).all()
     project_ids = [m.project_id for m in member_of]
@@ -71,8 +72,13 @@ def submit_timesheet():
     all_project_ids = list(set(project_ids + [p.id for p in pm_projects]))
     projects = Project.query.filter(Project.id.in_(all_project_ids)).order_by(Project.name).all() if all_project_ids else []
 
+    # Set default choice structures
     form.project_id.choices = [(0, '— Select Project —')] + [(p.id, p.name) for p in projects]
     form.task_id.choices = [(0, '— Optional: Select Task —')]
+
+    # Check for GET query pre-populations
+    pre_project_id = request.args.get('project_id', type=int) if request.method == 'GET' else None
+    pre_task_id = request.args.get('task_id', type=int) if request.method == 'GET' else None
 
     # On POST, populate task_id choices from the submitted project so WTForms
     # doesn't reject the AJAX-loaded task as "Not a valid choice"
@@ -82,18 +88,26 @@ def submit_timesheet():
             project_id=selected_project_id, assigned_to=current_user.id
         ).order_by(Task.title).all()
         form.task_id.choices += [(t.id, t.title) for t in tasks]
-    elif request.method == 'GET' and projects:
-        first_project = projects[0]
-        tasks = Task.query.filter_by(
-            project_id=first_project.id, assigned_to=current_user.id
-        ).order_by(Task.title).all()
-        form.task_id.choices += [(t.id, t.title) for t in tasks]
+    elif request.method == 'GET':
+        active_project_id = pre_project_id if (pre_project_id and pre_project_id in all_project_ids) else (projects[0].id if projects else None)
+        if active_project_id:
+            tasks = Task.query.filter_by(
+                project_id=active_project_id, assigned_to=current_user.id
+            ).order_by(Task.title).all()
+            form.task_id.choices += [(t.id, t.title) for t in tasks]
+            
+        if pre_project_id and pre_project_id in all_project_ids:
+            form.project_id.data = pre_project_id
+            if pre_task_id:
+                t_check = Task.query.filter_by(id=pre_task_id, project_id=pre_project_id, assigned_to=current_user.id).first()
+                if t_check:
+                    form.task_id.data = pre_task_id
 
     if form.validate_on_submit():
         project_id = form.project_id.data
         if project_id == 0:
             flash('Please select a project.', 'danger')
-            return render_template('employee/timesheet_form.html', form=form, employee=emp)
+            return render_template('employee/timesheet_form.html', form=form, employee=emp, next_url=next_url)
 
         task_id = form.task_id.data if form.task_id.data != 0 else None
         ts = Timesheet(
@@ -115,9 +129,11 @@ def submit_timesheet():
             db.session.add(notif)
         db.session.commit()
         flash('Timesheet entry submitted for approval.', 'success')
+        if next_url:
+            return redirect(next_url)
         return redirect(url_for('employee.my_timesheets'))
 
-    return render_template('employee/timesheet_form.html', form=form, employee=emp)
+    return render_template('employee/timesheet_form.html', form=form, employee=emp, next_url=next_url)
 
 
 @bp.route('/api/tasks-for-project/<int:project_id>')
