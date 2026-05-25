@@ -15,12 +15,15 @@
 
         <div class="mb-3">
             <label for="employee_id" class="form-label fw-semibold">Employee</label>
-            <select name="employee_id" id="employee_id" class="form-select" required>
+            <select name="employee_id" id="employee_id" class="form-select" required {% if record %}disabled{% endif %}>
                 <option value="">-- Select Employee --</option>
                 {% for emp in employees %}
-                <option value="{{ emp.id }}">{{ emp.user.full_name }} ({{ emp.emp_code }})</option>
+                <option value="{{ emp.id }}" {% if record and record.employee_id == emp.id %}selected{% endif %}>{{ emp.user.full_name }} ({{ emp.emp_code }})</option>
                 {% endfor %}
             </select>
+            {% if record %}
+            <input type="hidden" name="employee_id" value="{{ record.employee_id }}">
+            {% endif %}
         </div>
 
         <div class="row g-3">
@@ -30,7 +33,7 @@
             </div>
             <div class="col-md-6">
                 {{ form.year.label(class="form-label") }}
-                {{ form.year(class="form-control", placeholder="2026", value="2026") }}
+                {{ form.year(class="form-control", placeholder="2026", value=record.year if record else "2026") }}
             </div>
             <div class="col-md-4">
                 {{ form.basic.label(class="form-label") }}
@@ -65,4 +68,18 @@
         </div>
     </form>
 </div>
+
+<script>
+function calcNet() {
+    var b = parseFloat(document.getElementById('basic').value) || 0;
+    var h = parseFloat(document.getElementById('hra').value) || 0;
+    var d = parseFloat(document.getElementById('deductions').value) || 0;
+    var net = b + h - d;
+    document.getElementById('netSalaryDisplay').innerText = '₹' + net.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+document.getElementById('basic').addEventListener('input', calcNet);
+document.getElementById('hra').addEventListener('input', calcNet);
+document.getElementById('deductions').addEventListener('input', calcNet);
+calcNet();
+</script>
 {% endblock %}

@@ -6,8 +6,55 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h4 style="font-weight:700;">Employee Expense Claims</h4>
-        <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">{{ claims | length }} records</p>
+        <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">{{ claims.total }} records shown</p>
     </div>
+</div>
+
+<!-- Filters -->
+<div class="data-card mb-4" style="padding:16px 20px;">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-2">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Employee</label>
+            <select name="employee_id" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% for emp in employees %}
+                <option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.emp_code }} — {{ emp.user.full_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Category</label>
+            <select name="category" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% for cat in ['Travel', 'Medical', 'Software', 'Food', 'Other'] %}
+                <option value="{{ cat }}" {% if selected_category == cat %}selected{% endif %}>{{ cat }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Status</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% for s in ['Pending', 'Approved', 'Rejected'] %}
+                <option value="{{ s }}" {% if selected_status == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">From</label>
+            <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from }}">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">To</label>
+            <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to }}">
+        </div>
+        <div class="col-md-1">
+            <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-search"></i></button>
+        </div>
+        <div class="col-md-1">
+            <a href="{{ url_for('finance.employee_expenses') }}" class="btn btn-outline-secondary btn-sm w-100">Clear</a>
+        </div>
+    </form>
 </div>
 
 <div class="data-card">
@@ -25,7 +72,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for claim in claims %}
+                {% for claim in claims.items %}
                 <tr>
                     <td class="fw-semibold">{{ claim.employee.user.full_name }} ({{ claim.employee.emp_code }})</td>
                     <td>{{ claim.category }}</td>
@@ -36,6 +83,9 @@
                     <td>
                         <div class="d-flex gap-1">
                             {% if claim.status == 'Pending' %}
+                            <a href="{{ url_for('finance.edit_employee_expense', claim_id=claim.id) }}" class="btn-action" title="Edit">
+                                <i class="fas fa-pen-to-square"></i>
+                            </a>
                             <form method="POST" action="{{ url_for('finance.approve_employee_expense', claim_id=claim.id) }}" class="d-inline">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="btn-action" title="Approve" style="color:var(--success);">
@@ -59,4 +109,8 @@
         </table>
     </div>
 </div>
+
+{% with pagination=claims %}
+    {% include 'includes/pagination.html' %}
+{% endwith %}
 {% endblock %}

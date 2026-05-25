@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Payroll Pipeline — Enterprise Portal{% endblock %}
+{% block page_title %}Payroll Pipeline{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h4 style="font-weight:700;">HR → Finance Payroll Pipeline</h4>
+        <p style="color:var(--text-secondary); font-size:0.85rem; margin:0;">Convert submitted payroll inputs into pending salary records.</p>
+    </div>
+    {% if inputs and selected_month and selected_year %}
+    <form method="POST" action="{{ url_for('finance.bulk_process_payroll') }}" class="d-inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="month" value="{{ selected_month }}">
+        <input type="hidden" name="year" value="{{ selected_year }}">
+        <button type="submit" class="btn btn-success">
+            <i class="fas fa-money-bill-transfer me-2"></i>Process All ({{ selected_month }} {{ selected_year }})
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+<!-- Filters -->
+<div class="data-card mb-4" style="padding:16px 20px;">
+    <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Month</label>
+            <select name="month" class="form-select form-select-sm">
+                <option value="">All Pending Months</option>
+                {% for m in distinct_months %}
+                <option value="{{ m }}" {% if selected_month == m %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Year</label>
+            <select name="year" class="form-select form-select-sm">
+                <option value="">All Pending Years</option>
+                {% for y in distinct_years %}
+                <option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-primary btn-sm w-100"><i class="fas fa-filter me-1"></i>Filter</button>
+        </div>
+        <div class="col-md-2">
+            <a href="{{ url_for('finance.payroll_inputs') }}" class="btn btn-outline-secondary btn-sm w-100">Clear</a>
+        </div>
+    </form>
+</div>
+
+<div class="data-card">
+    <div class="table-responsive">
+        <table class="table align-middle" id="payroll-pipeline-table">
+            <thead>
+                <tr>
+                    <th>Employee</th>
+                    <th>Month/Year</th>
+                    <th class="text-center">Working Days</th>
+                    <th class="text-center">Present Days</th>
+                    <th class="text-center">Leaves Taken</th>
+                    <th>Base Salary</th>
+                    <th>Bonus</th>
+                    <th>Status</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for pi in inputs %}
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ pi.employee.user.full_name }}</div>
+                        <div style="font-size:0.75rem; color:var(--text-secondary);">Code: {{ pi.employee.emp_code }}</div>
+                    </td>
+                    <td><span class="badge bg-light text-dark fw-medium" style="border: 1px solid var(--border-color);">{{ pi.month }} {{ pi.year }}</span></td>
+                    <td class="text-center fw-medium">{{ pi.working_days }}</td>
+                    <td class="text-center fw-medium">{{ pi.present_days }}</td>
+                    <td class="text-center text-danger fw-medium">{{ pi.leaves_taken }}</td>
+                    <td class="fw-semibold">₹{{ "{:,.2f}".format(pi.employee.salary) }}</td>
+                    <td class="text-success fw-semibold">₹{{ "{:,.2f}".format(pi.bonus or 0) }}</td>
+                    <td><span class="badge-status badge-pending">Submitted</span></td>
+                    <td class="text-end">
+                        <form method="POST" action="{{ url_for('finance.process_payroll', input_id=pi.id) }}" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-primary btn-sm px-3" style="font-size:0.8rem; font-weight:600; border-radius:6px;">
+                                <i class="fas fa-gears me-1"></i>Process
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center py-5" style="color:var(--text-secondary);">
+                        <div style="font-size: 2.5rem; opacity: 0.3; margin-bottom: 1rem;"><i class="fas fa-folder-open"></i></div>
+                        <h5>No pending payroll inputs to process</h5>
+                        <p style="font-size:0.85rem; margin:0;">Either all payroll is processed or HR hasn't submitted payroll inputs yet.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if not selected_month or not selected_year %}
+{% if inputs %}
+<div class="alert alert-info mt-3" role="alert" style="border-radius:10px;">
+    <i class="fas fa-circle-info me-2"></i><strong>Tip:</strong> Filter by a specific **Month** and **Year** to enable the **Process All** bulk action at the top right.
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

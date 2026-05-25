@@ -75,7 +75,7 @@ class User(UserMixin, db.Model):
     modules = db.relationship('Module', secondary='user_modules', backref=db.backref('users', lazy='dynamic'))
     employee = db.relationship('Employee', backref='user', uselist=False, lazy='joined')
     tasks_assigned = db.relationship('Task', backref='assignee', foreign_keys='Task.assigned_to')
-    expenses = db.relationship('Expense', backref='submitter', foreign_keys='Expense.submitted_by')
+    expenses = db.relationship('Expense', back_populates='submitter', foreign_keys='Expense.submitted_by')
     projects_created = db.relationship('Project', backref='creator', foreign_keys='Project.created_by')
     login_history = db.relationship('LoginHistory', backref='user', lazy='dynamic')
 

@@ -5,10 +5,11 @@ from flask_login import current_user
 from app.employee import bp
 from app.decorators import module_required
 from app.extensions import db
-from app.models import (Employee, SalaryRecord, Expense, EmployeeDocument,
+from app.models import (Employee, SalaryRecord, EmployeeExpense, EmployeeDocument,
                         PerformanceReview, Project, ProjectMember, Task, Notification)
 from app.employee.forms import ExpenseClaimForm
 from app.hr import services
+from app.employee import services as emp_services
 
 
 # ===========================================================================
@@ -38,8 +39,8 @@ def payslip_detail(record_id):
 @module_required('employee')
 def expenses():
     emp = Employee.query.filter_by(user_id=current_user.id).first_or_404()
-    claims = Expense.query.filter_by(submitted_by=current_user.id)\
-        .order_by(Expense.date.desc()).all()
+    claims = EmployeeExpense.query.filter_by(employee_id=emp.id)\
+        .order_by(EmployeeExpense.date.desc()).all()
     return render_template('employee/expenses.html', claims=claims, employee=emp)
 
 
@@ -49,25 +50,28 @@ def submit_expense():
     emp = Employee.query.filter_by(user_id=current_user.id).first_or_404()
     form = ExpenseClaimForm()
     if form.validate_on_submit():
-        claim = Expense(
-            submitted_by=emp.user.id,
-            amount=form.amount.data,
-            date=form.expense_date.data,
+        success, msg = emp_services.submit_expense_claim(
+            employee=emp,
             category=form.category.data,
+            amount=form.amount.data,
+            expense_date=form.date.data,
             description=form.description.data or '',
-            status='Pending'
+            receipt_file=form.receipt.data,
+            ip=request.remote_addr or ''
         )
-        db.session.add(claim)
-        notif = Notification(
-            user_id=1,
-            title='New Expense Claim',
-            message=f'{current_user.full_name} submitted expense: {form.title.data} (₹{form.amount.data})',
-            category='info', link='/finance/employee-expenses'
-        )
-        db.session.add(notif)
-        db.session.commit()
-        flash('Expense claim submitted.', 'success')
-        return redirect(url_for('employee.expenses'))
+        if success:
+            notif = Notification(
+                user_id=1,
+                title='New Expense Claim',
+                message=f'{current_user.full_name} submitted expense: {form.category.data} (₹{form.amount.data})',
+                category='info', link='/finance/employee-expenses'
+            )
+            db.session.add(notif)
+            db.session.commit()
+            flash(msg, 'success')
+            return redirect(url_for('employee.expenses'))
+        else:
+            flash(msg, 'danger')
     return render_template('employee/expense_form.html', form=form, employee=emp)
 
 
@@ -75,7 +79,7 @@ def submit_expense():
 @module_required('employee')
 def expense_detail(expense_id):
     emp = Employee.query.filter_by(user_id=current_user.id).first_or_404()
-    claim = Expense.query.filter_by(id=expense_id, submitted_by=emp.user.id).first_or_404()
+    claim = EmployeeExpense.query.filter_by(id=expense_id, employee_id=emp.id).first_or_404()
     return render_template('employee/expense_detail.html', claim=claim, employee=emp)
 
 

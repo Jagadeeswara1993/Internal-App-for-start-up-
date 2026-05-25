@@ -5,8 +5,9 @@ from flask_login import current_user
 from app.finance import bp
 from app.decorators import module_required
 from app.extensions import db
-from app.models import Expense, Invoice, SalaryRecord, Employee, EmployeeExpense
-from app.finance.forms import ExpenseForm, InvoiceForm, SalaryForm
+from app.models import Expense, Invoice, SalaryRecord, Employee, EmployeeExpense, PayrollInput
+from app.finance.forms import ExpenseForm, EmployeeExpenseForm, InvoiceForm, SalaryForm
+from app.finance import services
 
 
 @bp.route('/')
@@ -21,6 +22,7 @@ def dashboard():
     ).filter(SalaryRecord.status == 'Paid').scalar()
     recent_expenses = Expense.query.order_by(Expense.date.desc()).limit(5).all()
     recent_invoices = Invoice.query.order_by(Invoice.issue_date.desc()).limit(5).all()
+    pending_payroll_count = PayrollInput.query.filter_by(status='Submitted').count()
     return render_template('finance/dashboard.html',
                            total_expenses=total_expenses,
                            pending_expenses=pending_expenses,
@@ -28,15 +30,33 @@ def dashboard():
                            unpaid_invoices=unpaid_invoices,
                            total_salary_paid=total_salary_paid,
                            recent_expenses=recent_expenses,
-                           recent_invoices=recent_invoices)
+                           recent_invoices=recent_invoices,
+                           pending_payroll_count=pending_payroll_count)
 
 
 # ── Expenses ─────────────────────────────────────────────────────────────────
 @bp.route('/expenses')
 @module_required('finance')
 def expenses():
-    all_expenses = Expense.query.order_by(Expense.date.desc()).all()
-    return render_template('finance/expenses.html', expenses=all_expenses)
+    category = request.args.get('category', '').strip()
+    status = request.args.get('status', '').strip()
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
+    page = request.args.get('page', 1, type=int)
+
+    filters = {
+        'category': category,
+        'status': status,
+        'date_from': date_from,
+        'date_to': date_to
+    }
+    paginated_expenses = services.get_expenses(filters, page=page, per_page=20)
+    return render_template('finance/expenses.html',
+                           expenses=paginated_expenses,
+                           selected_category=category,
+                           selected_status=status,
+                           date_from=date_from,
+                           date_to=date_to)
 
 
 @bp.route('/expenses/add', methods=['GET', 'POST'])
@@ -44,14 +64,14 @@ def expenses():
 def add_expense():
     form = ExpenseForm()
     if form.validate_on_submit():
-        expense = Expense(
+        services.create_expense(
             category=form.category.data,
             amount=form.amount.data,
-            date=form.date.data,
-            description=form.description.data or '',
-            submitted_by=current_user.id
+            date_val=form.date.data,
+            description=form.description.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
         )
-        db.session.add(expense)
         db.session.commit()
         flash('Expense recorded.', 'success')
         return redirect(url_for('finance.expenses'))
@@ -64,10 +84,15 @@ def edit_expense(expense_id):
     expense = Expense.query.get_or_404(expense_id)
     form = ExpenseForm(obj=expense)
     if form.validate_on_submit():
-        expense.category = form.category.data
-        expense.amount = form.amount.data
-        expense.date = form.date.data
-        expense.description = form.description.data or ''
+        services.update_expense(
+            expense_id=expense_id,
+            category=form.category.data,
+            amount=form.amount.data,
+            date_val=form.date.data,
+            description=form.description.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
+        )
         db.session.commit()
         flash('Expense updated.', 'success')
         return redirect(url_for('finance.expenses'))
@@ -77,8 +102,7 @@ def edit_expense(expense_id):
 @bp.route('/expenses/<int:expense_id>/approve', methods=['POST'])
 @module_required('finance')
 def approve_expense(expense_id):
-    expense = Expense.query.get_or_404(expense_id)
-    expense.status = 'Approved'
+    services.approve_expense(expense_id, current_user.id, request.remote_addr or '')
     db.session.commit()
     flash('Expense approved.', 'success')
     return redirect(url_for('finance.expenses'))
@@ -87,27 +111,46 @@ def approve_expense(expense_id):
 @bp.route('/expenses/<int:expense_id>/reject', methods=['POST'])
 @module_required('finance')
 def reject_expense(expense_id):
-    expense = Expense.query.get_or_404(expense_id)
-    expense.status = 'Rejected'
+    services.reject_expense(expense_id, current_user.id, request.remote_addr or '')
     db.session.commit()
     flash('Expense rejected.', 'warning')
     return redirect(url_for('finance.expenses'))
 
 
-# ── Invoices ─────────────────────────────────────────────────────────────────
+# ── Employee Expenses ────────────────────────────────────────────────────────
 @bp.route('/employee-expenses')
 @module_required('finance')
 def employee_expenses():
-    all_claims = EmployeeExpense.query.order_by(EmployeeExpense.date.desc()).all()
-    return render_template('finance/employee_expenses.html', claims=all_claims)
+    category = request.args.get('category', '').strip()
+    status = request.args.get('status', '').strip()
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
+    employee_id = request.args.get('employee_id', type=int)
+    page = request.args.get('page', 1, type=int)
+
+    filters = {
+        'category': category,
+        'status': status,
+        'date_from': date_from,
+        'date_to': date_to,
+        'employee_id': employee_id
+    }
+    paginated_claims = services.get_employee_expenses(filters, page=page, per_page=20)
+    employees = Employee.query.order_by(Employee.emp_code).all()
+    return render_template('finance/employee_expenses.html',
+                           claims=paginated_claims,
+                           employees=employees,
+                           selected_category=category,
+                           selected_status=status,
+                           selected_employee=employee_id,
+                           date_from=date_from,
+                           date_to=date_to)
 
 
 @bp.route('/employee-expenses/<int:claim_id>/approve', methods=['POST'])
 @module_required('finance')
 def approve_employee_expense(claim_id):
-    claim = EmployeeExpense.query.get_or_404(claim_id)
-    claim.status = 'Approved'
-    claim.reviewed_by = current_user.id
+    services.approve_employee_expense(claim_id, current_user.id, request.remote_addr or '')
     db.session.commit()
     flash('Employee expense claim approved.', 'success')
     return redirect(url_for('finance.employee_expenses'))
@@ -116,20 +159,56 @@ def approve_employee_expense(claim_id):
 @bp.route('/employee-expenses/<int:claim_id>/reject', methods=['POST'])
 @module_required('finance')
 def reject_employee_expense(claim_id):
-    claim = EmployeeExpense.query.get_or_404(claim_id)
-    claim.status = 'Rejected'
-    claim.reviewed_by = current_user.id
+    services.reject_employee_expense(claim_id, current_user.id, request.remote_addr or '')
     db.session.commit()
     flash('Employee expense claim rejected.', 'warning')
     return redirect(url_for('finance.employee_expenses'))
+
+
+@bp.route('/employee-expenses/<int:claim_id>/edit', methods=['GET', 'POST'])
+@module_required('finance')
+def edit_employee_expense(claim_id):
+    claim = EmployeeExpense.query.get_or_404(claim_id)
+    form = EmployeeExpenseForm(obj=claim)
+    if form.validate_on_submit():
+        services.update_employee_expense(
+            claim_id=claim_id,
+            category=form.category.data,
+            amount=form.amount.data,
+            date_val=form.date.data,
+            description=form.description.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
+        )
+        db.session.commit()
+        flash('Employee expense claim updated.', 'success')
+        return redirect(url_for('finance.employee_expenses'))
+    return render_template('finance/employee_expense_form.html', form=form, title='Edit Employee Expense Claim', claim=claim)
 
 
 # ── Invoices ─────────────────────────────────────────────────────────────────
 @bp.route('/invoices')
 @module_required('finance')
 def invoices():
-    all_invoices = Invoice.query.order_by(Invoice.issue_date.desc()).all()
-    return render_template('finance/invoices.html', invoices=all_invoices)
+    status = request.args.get('status', '').strip()
+    client_name = request.args.get('client_name', '').strip()
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
+    page = request.args.get('page', 1, type=int)
+
+    filters = {
+        'status': status,
+        'client_name': client_name,
+        'date_from': date_from,
+        'date_to': date_to
+    }
+    paginated_invoices = services.get_invoices(filters, page=page, per_page=20)
+    return render_template('finance/invoices.html',
+                           invoices=paginated_invoices,
+                           selected_status=status,
+                           client_name=client_name,
+                           date_from=date_from,
+                           date_to=date_to)
 
 
 @bp.route('/invoices/add', methods=['GET', 'POST'])
@@ -137,19 +216,20 @@ def invoices():
 def add_invoice():
     form = InvoiceForm()
     if form.validate_on_submit():
-        if Invoice.query.filter_by(invoice_number=form.invoice_number.data).first():
-            flash('Invoice number already exists.', 'danger')
-            return render_template('finance/invoice_form.html', form=form, title='New Invoice')
-        invoice = Invoice(
+        invoice, err = services.create_invoice(
             invoice_number=form.invoice_number.data,
             client_name=form.client_name.data,
             amount=form.amount.data,
             issue_date=form.issue_date.data,
             due_date=form.due_date.data,
             status=form.status.data,
-            description=form.description.data or ''
+            description=form.description.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
         )
-        db.session.add(invoice)
+        if err:
+            flash(err, 'danger')
+            return render_template('finance/invoice_form.html', form=form, title='New Invoice')
         db.session.commit()
         flash(f'Invoice {invoice.invoice_number} created.', 'success')
         return redirect(url_for('finance.invoices'))
@@ -162,21 +242,23 @@ def edit_invoice(invoice_id):
     invoice = Invoice.query.get_or_404(invoice_id)
     form = InvoiceForm(obj=invoice)
     if form.validate_on_submit():
-        existing = Invoice.query.filter(Invoice.invoice_number == form.invoice_number.data,
-                                         Invoice.id != invoice.id).first()
-        if existing:
-            flash('Invoice number already exists.', 'danger')
-            return render_template('finance/invoice_form.html', form=form,
-                                   title='Edit Invoice', invoice=invoice)
-        invoice.invoice_number = form.invoice_number.data
-        invoice.client_name = form.client_name.data
-        invoice.amount = form.amount.data
-        invoice.issue_date = form.issue_date.data
-        invoice.due_date = form.due_date.data
-        invoice.status = form.status.data
-        invoice.description = form.description.data or ''
+        updated_invoice, err = services.update_invoice(
+            invoice_id=invoice_id,
+            invoice_number=form.invoice_number.data,
+            client_name=form.client_name.data,
+            amount=form.amount.data,
+            issue_date=form.issue_date.data,
+            due_date=form.due_date.data,
+            status=form.status.data,
+            description=form.description.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
+        )
+        if err:
+            flash(err, 'danger')
+            return render_template('finance/invoice_form.html', form=form, title='Edit Invoice', invoice=invoice)
         db.session.commit()
-        flash(f'Invoice {invoice.invoice_number} updated.', 'success')
+        flash(f'Invoice {updated_invoice.invoice_number} updated.', 'success')
         return redirect(url_for('finance.invoices'))
     return render_template('finance/invoice_form.html', form=form, title='Edit Invoice', invoice=invoice)
 
@@ -185,9 +267,27 @@ def edit_invoice(invoice_id):
 @bp.route('/salaries')
 @module_required('finance')
 def salaries():
-    records = SalaryRecord.query.order_by(SalaryRecord.year.desc(),
-                                           SalaryRecord.month.desc()).all()
-    return render_template('finance/salaries.html', records=records)
+    status = request.args.get('status', '').strip()
+    employee_id = request.args.get('employee_id', type=int)
+    date_from = request.args.get('date_from', '').strip()
+    date_to = request.args.get('date_to', '').strip()
+    page = request.args.get('page', 1, type=int)
+
+    filters = {
+        'status': status,
+        'employee_id': employee_id,
+        'date_from': date_from,
+        'date_to': date_to
+    }
+    paginated_records = services.get_salaries(filters, page=page, per_page=20)
+    employees = Employee.query.order_by(Employee.emp_code).all()
+    return render_template('finance/salaries.html',
+                           records=paginated_records,
+                           employees=employees,
+                           selected_status=status,
+                           selected_employee=employee_id,
+                           date_from=date_from,
+                           date_to=date_to)
 
 
 @bp.route('/salaries/add', methods=['GET', 'POST'])
@@ -202,24 +302,190 @@ def add_salary():
             flash('Please select an employee.', 'danger')
             return render_template('finance/salary_form.html', form=form,
                                    employees=employees, title='Add Salary Record')
-        basic = form.basic.data or 0
-        hra = form.hra.data or 0
-        deductions = form.deductions.data or 0
-        net_salary = basic + hra - deductions
-
-        record = SalaryRecord(
+        services.create_salary(
             employee_id=emp_id,
             month=form.month.data,
             year=form.year.data,
-            basic=basic,
-            hra=hra,
-            deductions=deductions,
-            net_salary=net_salary,
-            status=form.status.data
+            basic=form.basic.data,
+            hra=form.hra.data or 0,
+            deductions=form.deductions.data or 0,
+            status=form.status.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
         )
-        db.session.add(record)
         db.session.commit()
         flash('Salary record created.', 'success')
         return redirect(url_for('finance.salaries'))
     return render_template('finance/salary_form.html', form=form,
                            employees=employees, title='Add Salary Record')
+
+
+@bp.route('/salaries/<int:salary_id>/edit', methods=['GET', 'POST'])
+@module_required('finance')
+def edit_salary(salary_id):
+    record = SalaryRecord.query.get_or_404(salary_id)
+    if record.status != 'Pending':
+        flash(f"Cannot edit a salary record with status '{record.status}'. Only Pending records can be edited.", 'danger')
+        return redirect(url_for('finance.salaries'))
+
+    form = SalaryForm(obj=record)
+    employees = Employee.query.order_by(Employee.emp_code).all()
+
+    if form.validate_on_submit():
+        updated_record, err = services.update_salary(
+            salary_id=salary_id,
+            month=form.month.data,
+            year=form.year.data,
+            basic=form.basic.data,
+            hra=form.hra.data or 0,
+            deductions=form.deductions.data or 0,
+            status=form.status.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
+        )
+        if err:
+            flash(err, 'danger')
+            return render_template('finance/salary_form.html', form=form,
+                                   employees=employees, title='Edit Salary Record', record=record)
+        db.session.commit()
+        flash('Salary record updated.', 'success')
+        return redirect(url_for('finance.salaries'))
+    return render_template('finance/salary_form.html', form=form,
+                           employees=employees, title='Edit Salary Record', record=record)
+
+
+@bp.route('/salaries/<int:salary_id>/process', methods=['POST'])
+@module_required('finance')
+def process_salary_record(salary_id):
+    record, err = services.process_salary(salary_id, current_user.id, request.remote_addr or '')
+    if err:
+        flash(err, 'danger')
+    else:
+        db.session.commit()
+        flash(f'Salary for {record.employee.user.full_name} marked as Processed.', 'success')
+    return redirect(url_for('finance.salaries'))
+
+
+@bp.route('/salaries/<int:salary_id>/mark-paid', methods=['POST'])
+@module_required('finance')
+def mark_salary_paid(salary_id):
+    record, err = services.mark_salary_paid(salary_id, current_user.id, request.remote_addr or '')
+    if err:
+        flash(err, 'danger')
+    else:
+        db.session.commit()
+        flash(f'Salary for {record.employee.user.full_name} marked as Paid.', 'success')
+    return redirect(url_for('finance.salaries'))
+
+
+@bp.route('/salaries/bulk-pay', methods=['POST'])
+@module_required('finance')
+def bulk_pay_salaries():
+    month = request.form.get('month', '').strip()
+    year_val = request.form.get('year', '').strip()
+    try:
+        year = int(year_val) if year_val else None
+    except ValueError:
+        year = None
+
+    if not month or not year:
+        flash('Please select a specific month and year to bulk pay.', 'danger')
+        return redirect(url_for('finance.salaries'))
+
+    count, err = services.bulk_pay_salaries(
+        month=month,
+        year=year,
+        user_id=current_user.id,
+        ip_address=request.remote_addr or ''
+    )
+    if err:
+        flash(err, 'warning')
+    else:
+        db.session.commit()
+        flash(f'Successfully marked {count} salary records as Paid for {month} {year}.', 'success')
+    return redirect(url_for('finance.salaries'))
+
+
+@bp.route('/salaries/<int:salary_id>/payslip')
+@module_required('finance')
+def payslip_view(salary_id):
+    record = SalaryRecord.query.get_or_404(salary_id)
+    return render_template('finance/payslip_view.html', record=record)
+
+
+# ── Payroll Pipeline ──────────────────────────────────────────────────────────
+@bp.route('/payroll-inputs')
+@module_required('finance')
+def payroll_inputs():
+    month = request.args.get('month', '').strip()
+    year_val = request.args.get('year', None)
+    try:
+        year = int(year_val) if year_val else None
+    except ValueError:
+        year = None
+    
+    query = PayrollInput.query.filter_by(status='Submitted')
+    if month:
+        query = query.filter_by(month=month)
+    if year:
+        query = query.filter_by(year=year)
+        
+    pending_inputs = query.order_by(PayrollInput.year.desc(), PayrollInput.month.desc()).all()
+    
+    # Get distinct months/years from submitted inputs for filter dropdowns
+    months = db.session.query(PayrollInput.month).filter_by(status='Submitted').distinct().all()
+    years = db.session.query(PayrollInput.year).filter_by(status='Submitted').distinct().all()
+    
+    distinct_months = [m[0] for m in months]
+    distinct_years = [y[0] for y in years]
+    
+    return render_template('finance/payroll_pipeline.html',
+                           inputs=pending_inputs,
+                           distinct_months=distinct_months,
+                           distinct_years=distinct_years,
+                           selected_month=month,
+                           selected_year=year)
+
+
+@bp.route('/payroll-inputs/<int:input_id>/process', methods=['POST'])
+@module_required('finance')
+def process_payroll(input_id):
+    record, err = services.process_payroll_input(input_id, current_user.id, request.remote_addr or '')
+    if err:
+        flash(err, 'danger')
+    else:
+        db.session.commit()
+        flash(f'Salary record created for {record.employee.user.full_name}.', 'success')
+    return redirect(url_for('finance.payroll_inputs'))
+
+
+@bp.route('/payroll-inputs/bulk-process', methods=['POST'])
+@module_required('finance')
+def bulk_process_payroll():
+    month = request.form.get('month', '').strip()
+    year_val = request.form.get('year', '').strip()
+    try:
+        year = int(year_val) if year_val else None
+    except ValueError:
+        year = None
+    
+    if not month or not year:
+        flash('Please select a specific month and year to bulk process.', 'danger')
+        return redirect(url_for('finance.payroll_inputs'))
+        
+    success_count, errors = services.bulk_process_payroll_inputs(
+        month=month,
+        year=year,
+        user_id=current_user.id,
+        ip_address=request.remote_addr or ''
+    )
+    
+    if success_count > 0:
+        db.session.commit()
+        flash(f'Successfully bulk-processed {success_count} payroll inputs.', 'success')
+    
+    if errors:
+        for err in errors[:5]:  # Limit flash messages to avoid cluttering
+            flash(err, 'warning')
+            
+    return redirect(url_for('finance.payroll_inputs'))

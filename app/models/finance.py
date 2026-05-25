@@ -24,6 +24,8 @@ class Expense(db.Model):
     submitted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     status = db.Column(db.String(20), default='Pending')     # Pending, Approved, Rejected
 
+    submitter = db.relationship('User', back_populates='expenses', foreign_keys=[submitted_by])
+
     def __repr__(self):
         return f'<Expense {self.category} ₹{self.amount}>'
 

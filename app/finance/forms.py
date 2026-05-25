@@ -18,6 +18,19 @@ class ExpenseForm(FlaskForm):
     submit = SubmitField('Save Expense')
 
 
+class EmployeeExpenseForm(FlaskForm):
+    category = SelectField('Category', choices=[
+        ('Travel', 'Travel'), ('Medical', 'Medical'),
+        ('Software', 'Software / Tools'), ('Food', 'Food / Meals'),
+        ('Office Supplies', 'Office Supplies'), ('Training', 'Training / Courses'),
+        ('Other', 'Other')
+    ], validators=[DataRequired()])
+    amount = FloatField('Amount (₹)', validators=[DataRequired()])
+    date = DateField('Date', validators=[Optional()])
+    description = TextAreaField('Description', validators=[Optional()])
+    submit = SubmitField('Save Expense Claim')
+
+
 class InvoiceForm(FlaskForm):
     invoice_number = StringField('Invoice Number', validators=[DataRequired(), Length(2, 30)])
     client_name = StringField('Client Name', validators=[DataRequired(), Length(2, 150)])
