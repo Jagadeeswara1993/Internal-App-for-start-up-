@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}My Dashboard — Enterprise Portal{% endblock %}
+{% block title %}My Dashboard — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Employee Dashboard{% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@
 <!-- Profile Activation Gate -->
 {% if employee and not profile_complete %}
 <div style="background:linear-gradient(135deg,#fff7ed,#fef3c7); border:2px solid #fbbf24; border-radius:16px; padding:30px; margin-bottom:30px; text-align:center;">
-    <div style="width:72px; height:72px; background:linear-gradient(135deg,#f59e0b,#d97706); border-radius:16px; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
+    <div style="width:72px; height:72px; background:linear-gradient(135deg,#9c5070,#d97706); border-radius:16px; display:flex; align-items:center; justify-content:center; margin:0 auto 16px;">
         <i class="fas fa-user-clock" style="color:#fff; font-size:1.8rem;"></i>
     </div>
     <h4 style="font-weight:700; color:#92400e; margin-bottom:8px;">Profile Setup in Progress</h4>
@@ -23,10 +23,10 @@
         <div class="d-flex flex-column gap-1" style="font-size:0.85rem; text-align:left;">
             <div><strong>Code:</strong> <code>{{ employee.emp_code }}</code></div>
             <div><strong>Department:</strong>
-                {% if employee.department %}{{ employee.department_name }}{% else %}<span style="color:#dc2626;">Awaiting assignment</span>{% endif %}
+                {% if employee.department %}{{ employee.department_name }}{% else %}<span style="color:#1a0a10;">Awaiting assignment</span>{% endif %}
             </div>
             <div><strong>Designation:</strong>
-                {% if employee.designation %}{{ employee.designation_title }}{% else %}<span style="color:#dc2626;">Awaiting assignment</span>{% endif %}
+                {% if employee.designation %}{{ employee.designation_title }}{% else %}<span style="color:#1a0a10;">Awaiting assignment</span>{% endif %}
             </div>
         </div>
     </div>
@@ -120,17 +120,17 @@
 
 <!-- Timesheet Summary -->
 {% if employee %}
-<div class="data-card mb-4" style="border-left: 4px solid #8b5cf6;">
+<div class="data-card mb-4" style="border-left: 4px solid var(--accent);">
     <div class="p-4">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
             <div>
-                <h6 class="fw-bold mb-1"><i class="fas fa-clock me-2" style="color:#8b5cf6;"></i>Timesheets This Month</h6>
+                <h6 class="fw-bold mb-1"><i class="fas fa-clock me-2" style="color:var(--accent);"></i>Timesheets This Month</h6>
                 <span style="font-size:0.85rem; color:var(--text-secondary);">
                     <strong>{{ ts_summary.total_hours }}h</strong> logged
-                    · <span style="color:#22c55e;">{{ ts_summary.approved_hours }}h approved</span>
-                    · <span style="color:#f59e0b;">{{ ts_summary.pending_hours }}h pending</span>
+                    · <span style="color:#4a1c2e;">{{ ts_summary.approved_hours }}h approved</span>
+                    · <span style="color:#9c5070;">{{ ts_summary.pending_hours }}h pending</span>
                     {% if ts_summary.rejected_count > 0 %}
-                    · <span style="color:#ef4444;">{{ ts_summary.rejected_count }} rejected</span>
+                    · <span style="color:#1a0a10;">{{ ts_summary.rejected_count }} rejected</span>
                     {% endif %}
                 </span>
             </div>
@@ -149,17 +149,17 @@
 
 <!-- My Team Card (visible only for managers) -->
 {% if is_manager %}
-<div class="data-card mb-4" style="border-left: 4px solid #f59e0b;">
+<div class="data-card mb-4" style="border-left: 4px solid #9c5070;">
     <div class="p-4">
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
             <div>
-                <h6 class="fw-bold mb-1"><i class="fas fa-users me-2" style="color:#f59e0b;"></i>My Team</h6>
+                <h6 class="fw-bold mb-1"><i class="fas fa-users me-2" style="color:#9c5070;"></i>My Team</h6>
                 <span style="font-size:0.85rem; color:var(--text-secondary);">
                     <strong>{{ team_size }}</strong> direct report{{ 's' if team_size != 1 else '' }}
                     {% if team_pending > 0 %}
-                    · <span style="color:#f59e0b; font-weight:600;">{{ team_pending }} leave{{ 's' if team_pending != 1 else '' }} awaiting your approval</span>
+                    · <span style="color:#9c5070; font-weight:600;">{{ team_pending }} leave{{ 's' if team_pending != 1 else '' }} awaiting your approval</span>
                     {% else %}
-                    · <span style="color:#22c55e;">No pending approvals</span>
+                    · <span style="color:#4a1c2e;">No pending approvals</span>
                     {% endif %}
                 </span>
             </div>
@@ -264,7 +264,7 @@
             <div class="p-3">
                 {% for notif in notifications %}
                 <div class="d-flex align-items-start gap-2 p-2 rounded mb-1 {% if not notif.is_read %}{% endif %}"
-                     style="font-size:0.83rem; {% if not notif.is_read %}background:rgba(99,102,241,0.06);{% endif %}">
+                     style="font-size:0.83rem; {% if not notif.is_read %}background:rgba(15,23,42,0.04);{% endif %}">
                     <i class="fas fa-{% if notif.category == 'success' %}check-circle text-success{% elif notif.category == 'warning' %}exclamation-triangle text-warning{% elif notif.category == 'danger' %}times-circle text-danger{% else %}info-circle text-primary{% endif %} mt-1" style="font-size:0.75rem;"></i>
                     <div>
                         <div class="fw-semibold">{{ notif.title }}</div>

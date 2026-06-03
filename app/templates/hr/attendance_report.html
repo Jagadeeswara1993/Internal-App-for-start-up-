@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Attendance Report — Enterprise Portal{% endblock %}
+{% block title %}Attendance Report — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Monthly Attendance Report{% endblock %}
 
 {% block content %}
@@ -67,9 +67,9 @@
                     <td class="fw-semibold">{{ row.employee.user.full_name }}</td>
                     <td><span class="badge bg-light text-dark border" style="font-size:0.7rem;">{{ row.employee.department_name }}</span></td>
                     <td style="text-align:center;"><span style="color:var(--success); font-weight:600;">{{ row.present }}</span></td>
-                    <td style="text-align:center;"><span style="color:#f59e0b; font-weight:600;">{{ row.late }}</span></td>
+                    <td style="text-align:center;"><span style="color:#9c5070; font-weight:600;">{{ row.late }}</span></td>
                     <td style="text-align:center;"><span style="color:var(--danger); font-weight:600;">{{ row.absent }}</span></td>
-                    <td style="text-align:center;"><span style="color:#8b5cf6; font-weight:600;">{{ row.half_day }}</span></td>
+                    <td style="text-align:center;"><span style="color:#9c5070; font-weight:600;">{{ row.half_day }}</span></td>
                     <td style="text-align:center; font-weight:600;">{{ row.total_hours }}h</td>
                     <td style="text-align:center;">
                         <span style="font-size:1.1rem; font-weight:700; color:var(--primary);">{{ row.effective_days }}</span>

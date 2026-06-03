@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}HR Analytics — Enterprise Portal{% endblock %}
+{% block title %}HR Analytics — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}HR Analytics{% endblock %}
 
 {% block extra_css %}
@@ -34,7 +34,7 @@
     margin: 0 auto;
 }
 .analytics-header {
-    background: linear-gradient(135deg, #7c3aed, #6366f1);
+    background: linear-gradient(135deg, #1a0a10, #2a1018);
     border-radius: 16px;
     padding: 28px 32px;
     margin-bottom: 28px;
@@ -84,7 +84,7 @@
 <div class="row g-4 mb-4">
     <div class="col-md-4">
         <div class="chart-card">
-            <h6><i class="fas fa-building me-2" style="color:#6366f1;"></i>Department Headcount</h6>
+            <h6><i class="fas fa-building me-2" style="color:#1a0a10;"></i>Department Headcount</h6>
             <p class="chart-subtitle">Employees across departments</p>
             <div class="chart-wrapper doughnut">
                 <canvas id="chartDeptHeadcount"></canvas>
@@ -93,7 +93,7 @@
     </div>
     <div class="col-md-4">
         <div class="chart-card">
-            <h6><i class="fas fa-user-clock me-2" style="color:#22c55e;"></i>Today's Attendance</h6>
+            <h6><i class="fas fa-user-clock me-2" style="color:#4a1c2e;"></i>Today's Attendance</h6>
             <p class="chart-subtitle">Live attendance snapshot</p>
             <div class="chart-wrapper doughnut">
                 <canvas id="chartTodayAttendance"></canvas>
@@ -102,7 +102,7 @@
     </div>
     <div class="col-md-4">
         <div class="chart-card">
-            <h6><i class="fas fa-user-plus me-2" style="color:#f59e0b;"></i>Onboarding Status</h6>
+            <h6><i class="fas fa-user-plus me-2" style="color:#9c5070;"></i>Onboarding Status</h6>
             <p class="chart-subtitle">Profile completion across workforce</p>
             <div class="chart-wrapper doughnut">
                 <canvas id="chartOnboarding"></canvas>
@@ -115,7 +115,7 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-12">
         <div class="chart-card">
-            <h6><i class="fas fa-chart-area me-2" style="color:#0ea5e9;"></i>Attendance Trend — Last 30 Working Days</h6>
+            <h6><i class="fas fa-chart-area me-2" style="color:#6b2d4a;"></i>Attendance Trend — Last 30 Working Days</h6>
             <p class="chart-subtitle">Daily present, late & absent counts (weekdays only)</p>
             <div class="chart-wrapper" style="height: 350px;">
                 <canvas id="chartAttendanceTrend"></canvas>
@@ -128,7 +128,7 @@
 <div class="row g-4 mb-4">
     <div class="col-md-5">
         <div class="chart-card">
-            <h6><i class="fas fa-calendar-xmark me-2" style="color:#ec4899;"></i>Leave Type Distribution</h6>
+            <h6><i class="fas fa-calendar-xmark me-2" style="color:#9c5070;"></i>Leave Type Distribution</h6>
             <p class="chart-subtitle">Approved leaves by type ({{ now().year if now is defined else "this year" }})</p>
             <div class="chart-wrapper doughnut">
                 <canvas id="chartLeaveType"></canvas>
@@ -137,7 +137,7 @@
     </div>
     <div class="col-md-7">
         <div class="chart-card">
-            <h6><i class="fas fa-chart-column me-2" style="color:#8b5cf6;"></i>Monthly Leave Trend</h6>
+            <h6><i class="fas fa-chart-column me-2" style="color:#4a1c2e;"></i>Monthly Leave Trend</h6>
             <p class="chart-subtitle">Leave days consumed per month</p>
             <div class="chart-wrapper" style="height: 320px;">
                 <canvas id="chartMonthlyLeave"></canvas>
@@ -150,7 +150,7 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-7">
         <div class="chart-card">
-            <h6><i class="fas fa-clock me-2" style="color:#14b8a6;"></i>Top Employees by Hours</h6>
+            <h6><i class="fas fa-clock me-2" style="color:#6b2d4a;"></i>Top Employees by Hours</h6>
             <p class="chart-subtitle">Top 15 by approved timesheet hours</p>
             <div class="chart-wrapper" style="height: 380px;">
                 <canvas id="chartEmpHours"></canvas>
@@ -159,7 +159,7 @@
     </div>
     <div class="col-lg-5">
         <div class="chart-card">
-            <h6><i class="fas fa-rotate me-2" style="color:#f97316;"></i>Shift Distribution</h6>
+            <h6><i class="fas fa-rotate me-2" style="color:#9c5070;"></i>Shift Distribution</h6>
             <p class="chart-subtitle">Workforce across shifts</p>
             <div class="chart-wrapper doughnut">
                 <canvas id="chartShiftDist"></canvas>
@@ -174,13 +174,13 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    const textColor = isDark ? '#cbd5e1' : '#475569';
+    const textColor = isDark ? '#d4a0b5' : '#4a1c2e';
     const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-    const strongTextColor = isDark ? '#f8fafc' : '#1e293b';
+    const strongTextColor = isDark ? '#f5e8ee' : '#2a1018';
     Chart.defaults.color = textColor;
     Chart.defaults.font.family = "'Inter', sans-serif";
 
-    const palette = ['#6366f1','#22c55e','#f59e0b','#ef4444','#0ea5e9','#ec4899','#8b5cf6','#14b8a6','#f97316','#64748b','#06b6d4','#a855f7','#10b981','#e11d48','#84cc16'];
+    const palette = ['#052659','#5483B3','#7DA0CA','#C1E8FF','#021024'];
 
     const deptData = {{ dept_data | tojson }};
     const todayAttData = {{ today_attendance | tojson }};
@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', function() {
         type: 'doughnut',
         data: {
             labels: todayAttData.labels,
-            datasets: [{ data: todayAttData.values, backgroundColor: ['#22c55e','#f59e0b','#ef4444','#f97316','#6366f1'], borderWidth: 0, hoverOffset: 8 }]
+            datasets: [{ data: todayAttData.values, backgroundColor: ['#4a1c2e','#9c5070','#1a0a10','#7a3855','#1a0a10'], borderWidth: 0, hoverOffset: 8 }]
         },
         options: { responsive: true, cutout: '65%', plugins: { legend: doughnutLegendConfig } }
     });
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
         type: 'doughnut',
         data: {
             labels: onboardingData.labels,
-            datasets: [{ data: onboardingData.values, backgroundColor: ['#22c55e','#ef4444'], borderWidth: 0, hoverOffset: 8 }]
+            datasets: [{ data: onboardingData.values, backgroundColor: ['#4a1c2e','#1a0a10'], borderWidth: 0, hoverOffset: 8 }]
         },
         options: { responsive: true, cutout: '65%', plugins: { legend: doughnutLegendConfig } }
     });
@@ -257,17 +257,17 @@ document.addEventListener('DOMContentLoaded', function() {
             datasets: [
                 {
                     label: 'Present', data: attTrendData.present, fill: true,
-                    backgroundColor: 'rgba(34,197,94,0.15)', borderColor: '#22c55e',
+                    backgroundColor: 'rgba(5,150,105,0.15)', borderColor: '#4a1c2e',
                     borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5
                 },
                 {
                     label: 'Late', data: attTrendData.late, fill: true,
-                    backgroundColor: 'rgba(245,158,11,0.15)', borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(249,115,22,0.15)', borderColor: '#9c5070',
                     borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5
                 },
                 {
                     label: 'Absent', data: attTrendData.absent, fill: true,
-                    backgroundColor: 'rgba(239,68,68,0.15)', borderColor: '#ef4444',
+                    backgroundColor: 'rgba(220,38,38,0.15)', borderColor: '#1a0a10',
                     borderWidth: 2, tension: 0.4, pointRadius: 2, pointHoverRadius: 5
                 }
             ]
@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
         type: 'doughnut',
         data: {
             labels: leaveTypeData.labels,
-            datasets: [{ data: leaveTypeData.values, backgroundColor: ['#6366f1','#22c55e','#f59e0b','#ec4899','#0ea5e9','#8b5cf6'], borderWidth: 0, hoverOffset: 8 }]
+            datasets: [{ data: leaveTypeData.values, backgroundColor: ['#1a0a10','#4a1c2e','#9c5070','#1a0a10','#6b2d4a','#6b2d4a'], borderWidth: 0, hoverOffset: 8 }]
         },
         options: {
             responsive: true, cutout: '65%',
@@ -308,7 +308,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 data: monthlyLeaveData.values,
                 backgroundColor: monthlyLeaveData.values.map((v, i) => {
                     const d = new Date().getMonth();
-                    return i === d ? '#6366f1' : 'rgba(99,102,241,0.25)';
+                    return i === d ? '#1a0a10' : 'rgba(15,23,42,0.18)';
                 }),
                 borderRadius: 6, maxBarThickness: 35
             }]

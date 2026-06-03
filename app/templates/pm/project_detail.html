@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ project.name }} — Enterprise Portal{% endblock %}
+{% block title %}{{ project.name }} — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}{{ project.name }}{% endblock %}
 
 {% block content %}
@@ -271,11 +271,11 @@
                             </td>
                             <td>
                                 {% if task.task_type == 'Story' %}
-                                <span class="badge" style="background:#dbeafe; color:#2563eb; font-size:0.68rem;"><i class="fas fa-bookmark me-1"></i>Story</span>
+                                <span class="badge" style="background:#f5e8ee; color:#4a1c2e; font-size:0.68rem;"><i class="fas fa-bookmark me-1"></i>Story</span>
                                 {% elif task.task_type == 'Bug' %}
-                                <span class="badge" style="background:#fee2e2; color:#dc2626; font-size:0.68rem;"><i class="fas fa-bug me-1"></i>Bug</span>
+                                <span class="badge" style="background:#4a1c2e; color:#ffffff; font-size:0.68rem;"><i class="fas fa-bug me-1"></i>Bug</span>
                                 {% else %}
-                                <span class="badge" style="background:#d1fae5; color:#059669; font-size:0.68rem;"><i class="fas fa-check-square me-1"></i>Task</span>
+                                <span class="badge" style="background:#d4a0b5; color:#2a1018; font-size:0.68rem;"><i class="fas fa-check-square me-1"></i>Task</span>
                                 {% endif %}
                             </td>
                             <td>{{ task.assignee.full_name if task.assignee else '—' }}</td>
@@ -313,7 +313,7 @@
                         </tr>
                         <!-- Sub-tasks (indented) -->
                         {% for sub in task.subtasks %}
-                        <tr style="background:#f8fafc;">
+                        <tr style="background:#f5e8ee;">
                             <td style="padding-left:36px;">
                                 <div class="d-flex align-items-center gap-2">
                                     <i class="fas fa-turn-up fa-rotate-90" style="font-size:0.65rem; color:var(--text-secondary);"></i>
@@ -321,7 +321,7 @@
                                 </div>
                             </td>
                             <td>
-                                <span class="badge" style="background:#e0e7ff; color:#4f46e5; font-size:0.68rem;"><i class="fas fa-indent me-1"></i>Sub</span>
+                                <span class="badge" style="background:#d4a0b5; color:#2a1018; font-size:0.68rem;"><i class="fas fa-indent me-1"></i>Sub</span>
                             </td>
                             <td style="font-size:0.85rem;">{{ sub.assignee.full_name if sub.assignee else '—' }}</td>
                             <td style="font-size:0.85rem;">{{ sub.estimated_hours|default(0.0) }}</td>

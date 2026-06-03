@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Project Analytics — Enterprise Portal{% endblock %}
+{% block title %}Project Analytics — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Project Analytics{% endblock %}
 
 {% block extra_css %}
@@ -34,7 +34,7 @@
     margin: 0 auto;
 }
 .analytics-header {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg, #1a0a10, #2a1018);
     border-radius: 16px;
     padding: 28px 32px;
     margin-bottom: 28px;
@@ -118,7 +118,7 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-6">
         <div class="chart-card">
-            <h6><i class="fas fa-bars-progress me-2" style="color:#0ea5e9;"></i>Project Progress Overview</h6>
+            <h6><i class="fas fa-bars-progress me-2" style="color:#6b2d4a;"></i>Project Progress Overview</h6>
             <p class="chart-subtitle">Click a project bar to drill down into its details and tasks</p>
             <div class="chart-wrapper" style="height: 350px;">
                 <canvas id="chartProjectProgress"></canvas>
@@ -127,7 +127,7 @@
     </div>
     <div class="col-lg-6">
         <div class="chart-card">
-            <h6><i class="fas fa-list-check me-2" style="color:#8b5cf6;"></i>Task Completion per Project</h6>
+            <h6><i class="fas fa-list-check me-2" style="color:#4a1c2e;"></i>Task Completion per Project</h6>
             <p class="chart-subtitle">Overview of task statuses across projects</p>
             <div class="chart-wrapper" style="height: 350px;">
                 <canvas id="chartTaskCompletion"></canvas>
@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Theme configs
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    Chart.defaults.color = isDark ? '#cbd5e1' : '#475569';
+    Chart.defaults.color = isDark ? '#d4a0b5' : '#4a1c2e';
     Chart.defaults.font.family = "'Inter', sans-serif";
     const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
 
@@ -237,7 +237,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // --- 1. Project Progress Chart ---
         const progressValues = filtered.map(p => p.progress);
-        const progressColors = progressValues.map(v => v === 100 ? '#22c55e' : (v > 0 ? '#f59e0b' : '#ef4444')); // Green, Yellow, Red
+        const progressColors = progressValues.map(v => v === 100 ? '#4a1c2e' : (v > 0 ? '#9c5070' : '#1a0a10'));
 
         if (chartProgress) chartProgress.destroy();
         chartProgress = new Chart(document.getElementById('chartProjectProgress'), {
@@ -296,9 +296,9 @@ document.addEventListener('DOMContentLoaded', function() {
             data: {
                 labels: labels,
                 datasets: [
-                    { label: 'Pending', data: pending, backgroundColor: '#ef4444', borderRadius: 4, maxBarThickness: 30 },
-                    { label: 'In Progress', data: inProg, backgroundColor: '#f59e0b', borderRadius: 4, maxBarThickness: 30 },
-                    { label: 'Done', data: done, backgroundColor: '#22c55e', borderRadius: 4, maxBarThickness: 30 }
+                    { label: 'Pending', data: pending, backgroundColor: '#1a0a10', borderRadius: 4, maxBarThickness: 30 },
+                    { label: 'In Progress', data: inProg, backgroundColor: '#9c5070', borderRadius: 4, maxBarThickness: 30 },
+                    { label: 'Done', data: done, backgroundColor: '#4a1c2e', borderRadius: 4, maxBarThickness: 30 }
                 ]
             },
             options: {

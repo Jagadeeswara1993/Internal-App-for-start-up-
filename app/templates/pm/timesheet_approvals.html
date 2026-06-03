@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Timesheet Approvals — Enterprise Portal{% endblock %}
+{% block title %}Timesheet Approvals — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Timesheet Approvals{% endblock %}
 
 {% block content %}
@@ -23,7 +23,7 @@
     <div class="col-sm-6 col-md-3">
         <div class="data-card">
             <div class="p-3 text-center">
-                <div style="font-size:1.6rem; font-weight:700; color:#f59e0b;">{{ stats.pending }}</div>
+                <div style="font-size:1.6rem; font-weight:700; color:var(--text-secondary);">{{ stats.pending }}</div>
                 <div style="font-size:0.78rem; color:var(--text-secondary);">Pending Review</div>
             </div>
         </div>
@@ -31,7 +31,7 @@
     <div class="col-sm-6 col-md-3">
         <div class="data-card">
             <div class="p-3 text-center">
-                <div style="font-size:1.6rem; font-weight:700; color:#22c55e;">{{ stats.approved }}</div>
+                <div style="font-size:1.6rem; font-weight:700; color:var(--text-primary);">{{ stats.approved }}</div>
                 <div style="font-size:0.78rem; color:var(--text-secondary);">Approved</div>
             </div>
         </div>
@@ -39,7 +39,7 @@
     <div class="col-sm-6 col-md-3">
         <div class="data-card">
             <div class="p-3 text-center">
-                <div style="font-size:1.6rem; font-weight:700; color:#22c55e;">{{ stats.total_hours }}h</div>
+                <div style="font-size:1.6rem; font-weight:700; color:var(--text-primary);">{{ stats.total_hours }}h</div>
                 <div style="font-size:0.78rem; color:var(--text-secondary);">Approved Hours</div>
             </div>
         </div>

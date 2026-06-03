@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ title }} — Enterprise Portal{% endblock %}
+{% block title %}{{ title }} — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}{{ title }}{% endblock %}
 
 {% block content %}
@@ -13,14 +13,14 @@
 </div>
 
 <!-- Employee Info Banner -->
-<div style="background:linear-gradient(135deg,#ede9fe,#e0e7ff); border:2px solid #a78bfa; border-radius:14px; padding:20px 24px; margin-bottom:24px;">
+<div style="background:linear-gradient(135deg,#d4a0b5,#f5e8ee); border:2px solid #6b2d4a; border-radius:14px; padding:20px 24px; margin-bottom:24px;">
     <div class="d-flex align-items-center gap-3 flex-wrap">
-        <div style="width:56px; height:56px; background:linear-gradient(135deg,#6366f1,#4f46e5); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+        <div style="width:56px; height:56px; background:linear-gradient(135deg,#1a0a10,#4a1c2e); border-radius:12px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
             <span style="color:#fff; font-size:1.2rem; font-weight:700;">{{ employee.user.full_name[:2] | upper }}</span>
         </div>
         <div style="flex:1;">
-            <h5 style="font-weight:700; margin-bottom:2px; color:#3730a3;">{{ employee.user.full_name }}</h5>
-            <p style="font-size:0.85rem; color:#4338ca; margin-bottom:0;">
+            <h5 style="font-weight:700; margin-bottom:2px; color:#1a0a10;">{{ employee.user.full_name }}</h5>
+            <p style="font-size:0.85rem; color:#4a1c2e; margin-bottom:0;">
                 <code>{{ employee.emp_code }}</code> · {{ employee.user.email }}
             </p>
         </div>
@@ -155,7 +155,7 @@
 
         <hr style="margin:24px 20px 16px 20px; border-color:var(--border-color);">
         <div class="d-flex gap-2" style="padding:0 20px 20px 20px;">
-            <button type="submit" class="btn" style="background:linear-gradient(135deg,#10b981,#059669); color:#fff; font-weight:600; padding:10px 28px; border-radius:10px;">
+            <button type="submit" class="btn" style="background:linear-gradient(135deg,#10b981,#4a1c2e); color:#fff; font-weight:600; padding:10px 28px; border-radius:10px;">
                 <i class="fas fa-check-double me-2"></i>Complete Profile & Activate
             </button>
             <a href="{{ url_for('hr.unassigned_employees') }}" class="btn btn-outline-secondary">Cancel</a>

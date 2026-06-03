@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Board — {{ project.name }} — Enterprise Portal{% endblock %}
+{% block title %}Board — {{ project.name }} — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}{{ project.name }} — Board{% endblock %}
 
 {% block extra_css %}
@@ -54,7 +54,7 @@
     gap: 6px;
 }
 .view-toggle a:last-child { border-right: none; }
-.view-toggle a:hover { background: #f1f5f9; color: var(--text-primary); }
+.view-toggle a:hover { background: #f5e8ee; color: var(--text-primary); }
 .view-toggle a.active {
     background: var(--primary);
     color: white;
@@ -73,7 +73,7 @@
     min-width: 310px;
     max-width: 340px;
     flex: 1;
-    background: #f1f5f9;
+    background: #f5e8ee;
     border-radius: 12px;
     display: flex;
     flex-direction: column;
@@ -104,19 +104,19 @@
     border-radius: 10px;
 }
 .kanban-column[data-status="Pending"] .kanban-column-header {
-    border-bottom-color: #f59e0b;
+    border-bottom-color: var(--accent);
 }
 .kanban-column[data-status="Pending"] .kanban-column-header h6 {
-    color: #b45309;
+    color: #7a3855;
 }
 .kanban-column[data-status="In Progress"] .kanban-column-header {
-    border-bottom-color: #0ea5e9;
+    border-bottom-color: var(--info);
 }
 .kanban-column[data-status="In Progress"] .kanban-column-header h6 {
     color: #0369a1;
 }
 .kanban-column[data-status="Done"] .kanban-column-header {
-    border-bottom-color: #10b981;
+    border-bottom-color: var(--success);
 }
 .kanban-column[data-status="Done"] .kanban-column-header h6 {
     color: #047857;
@@ -191,10 +191,10 @@
     font-size: 0.6rem;
     margin-top: 1px;
 }
-.task-type-icon.type-story   { background: #dbeafe; color: #2563eb; }
-.task-type-icon.type-bug     { background: #fee2e2; color: #dc2626; }
-.task-type-icon.type-task    { background: #d1fae5; color: #059669; }
-.task-type-icon.type-sub-task { background: #e0e7ff; color: #4f46e5; }
+.task-type-icon.type-story   { background: #f5e8ee; color: #4a1c2e; }
+.task-type-icon.type-bug     { background: #4a1c2e; color: #ffffff; }
+.task-type-icon.type-task    { background: #d4a0b5; color: #2a1018; }
+.task-type-icon.type-sub-task { background: #d4a0b5; color: #2a1018; }
 
 .kanban-card .card-footer {
     display: flex;
@@ -217,7 +217,7 @@
 }
 .priority-dot.p-low      { background: #10b981; }
 .priority-dot.p-medium   { background: #0ea5e9; }
-.priority-dot.p-high     { background: #f59e0b; }
+.priority-dot.p-high     { background: #9c5070; }
 .priority-dot.p-critical { background: #ef4444; }
 
 .kanban-card .card-avatar {

@@ -73,8 +73,8 @@
                     <td style="font-size:0.85rem;">{{ c.email }}</td>
                     <td style="font-size:0.85rem;">{{ c.phone or '—' }}</td>
                     <td>
-                        {% set status_colors = {'Applied':'#6366f1','Screening':'#0ea5e9','Interview':'#f59e0b','Offer':'#8b5cf6','Hired':'#10b981','Rejected':'#ef4444'} %}
-                        <span style="background:{{ status_colors.get(c.status, '#94a3b8') }}15; color:{{ status_colors.get(c.status, '#94a3b8') }}; padding:3px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;">{{ c.status }}</span>
+                        {% set status_colors = {'Applied':'#1a0a10','Screening':'#6b2d4a','Interview':'#9c5070','Offer':'#4a1c2e','Hired':'#4a1c2e','Rejected':'#1a0a10'} %}
+                        <span style="background:{{ status_colors.get(c.status, '#9c5070') }}15; color:{{ status_colors.get(c.status, '#9c5070') }}; padding:3px 10px; border-radius:20px; font-size:0.75rem; font-weight:600;">{{ c.status }}</span>
                     </td>
                     <td style="text-align:center;">
                         <span style="font-weight:600;">{{ c.interviews.count() }}</span>
@@ -104,7 +104,7 @@
                     <td style="text-align:center;">
                         {% if intv.rating %}
                         {% for i in range(5) %}
-                        <i class="fas fa-star" style="font-size:0.6rem; color:{% if i < intv.rating %}#f59e0b{% else %}#e2e8f0{% endif %};"></i>
+                        <i class="fas fa-star" style="font-size:0.6rem; color:{% if i < intv.rating %}#9c5070{% else %}#d4a0b5{% endif %};"></i>
                         {% endfor %}
                         {% else %}—{% endif %}
                     </td>

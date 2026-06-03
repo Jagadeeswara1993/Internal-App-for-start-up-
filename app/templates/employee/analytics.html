@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}My Work Analytics — Enterprise Portal{% endblock %}
+{% block title %}My Work Analytics — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}My Work Analytics{% endblock %}
 
 {% block extra_css %}
@@ -34,7 +34,7 @@
     margin: 0 auto;
 }
 .analytics-header {
-    background: linear-gradient(135deg, #0ea5e9, #6366f1);
+    background: linear-gradient(135deg, #1a0a10, #4a1c2e);
     border-radius: 16px;
     padding: 28px 32px;
     margin-bottom: 28px;
@@ -108,7 +108,7 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-4">
         <div class="chart-card">
-            <h6><i class="fas fa-list-check me-2" style="color:#6366f1;"></i>My Task Status</h6>
+            <h6><i class="fas fa-list-check me-2" style="color:#1a0a10;"></i>My Task Status</h6>
             <p class="chart-subtitle">Distribution of your assigned tasks</p>
             <div class="chart-wrapper doughnut">
                 <canvas id="chartMyTaskStatus"></canvas>
@@ -117,7 +117,7 @@
     </div>
     <div class="col-lg-8">
         <div class="chart-card">
-            <h6><i class="fas fa-chart-line me-2" style="color:#8b5cf6;"></i>Daily Hours Trend (Last 30 Days)</h6>
+            <h6><i class="fas fa-chart-line me-2" style="color:#4a1c2e;"></i>Daily Hours Trend (Last 30 Days)</h6>
             <p class="chart-subtitle">Your logged and approved hours over time</p>
             <div class="chart-wrapper" style="height: 300px;">
                 <canvas id="chartDailyHours"></canvas>
@@ -130,7 +130,7 @@
 <div class="row g-4 mb-4">
     <div class="col-lg-6">
         <div class="chart-card">
-            <h6><i class="fas fa-diagram-project me-2" style="color:#0ea5e9;"></i>My Tasks per Project</h6>
+            <h6><i class="fas fa-diagram-project me-2" style="color:#6b2d4a;"></i>My Tasks per Project</h6>
             <p class="chart-subtitle">Click a bar to drill down into the project tasks</p>
             <div class="chart-wrapper" style="height: 320px;">
                 <canvas id="chartTasksPerProject"></canvas>
@@ -139,7 +139,7 @@
     </div>
     <div class="col-lg-6">
         <div class="chart-card">
-            <h6><i class="fas fa-percent me-2" style="color:#14b8a6;"></i>Overall Project Completion</h6>
+            <h6><i class="fas fa-percent me-2" style="color:#6b2d4a;"></i>Overall Project Completion</h6>
             <p class="chart-subtitle">Progress of the projects you are involved in</p>
             <div class="chart-wrapper" style="height: 320px;">
                 <canvas id="chartProjectCompletion"></canvas>
@@ -202,7 +202,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Theme configs
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-    Chart.defaults.color = isDark ? '#cbd5e1' : '#475569';
+    Chart.defaults.color = isDark ? '#d4a0b5' : '#4a1c2e';
     Chart.defaults.font.family = "'Inter', sans-serif";
     const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
 
@@ -229,11 +229,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 label: 'Hours',
                 data: dailyHoursData.values,
                 fill: true,
-                backgroundColor: 'rgba(139,92,246,0.1)',
-                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(15,23,42,0.1)',
+                borderColor: '#1a0a10',
                 borderWidth: 2,
                 tension: 0.4,
-                pointBackgroundColor: '#8b5cf6',
+                pointBackgroundColor: '#1a0a10',
                 pointBorderColor: '#fff',
                 pointBorderWidth: 2,
                 pointRadius: 3,
@@ -279,7 +279,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         drillDownSec.style.display = 'none';
 
-        const strongTextColor = isDark ? '#f8fafc' : '#1e293b';
+        const strongTextColor = isDark ? '#f5e8ee' : '#2a1018';
 
         const doughnutLegendConfig = {
             position: 'bottom',
@@ -324,7 +324,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 labels: ['Pending', 'In Progress', 'Done'],
                 datasets: [{
                     data: [taskStatusCounts['Pending'], taskStatusCounts['In Progress'], taskStatusCounts['Done']],
-                    backgroundColor: ['#ef4444','#f59e0b','#22c55e'],
+                    backgroundColor: ['#1a0a10','#9c5070','#4a1c2e'],
                     borderWidth: 0,
                     hoverOffset: 8
                 }]
@@ -350,9 +350,9 @@ document.addEventListener('DOMContentLoaded', function() {
             data: {
                 labels: projectLabels,
                 datasets: [
-                    { label: 'Pending', data: pendingData, backgroundColor: '#ef4444', borderRadius: 4, maxBarThickness: 45 },
-                    { label: 'In Progress', data: progData, backgroundColor: '#f59e0b', borderRadius: 4, maxBarThickness: 45 },
-                    { label: 'Done', data: doneData, backgroundColor: '#22c55e', borderRadius: 4, maxBarThickness: 45 }
+                    { label: 'Pending', data: pendingData, backgroundColor: '#1a0a10', borderRadius: 4, maxBarThickness: 45 },
+                    { label: 'In Progress', data: progData, backgroundColor: '#9c5070', borderRadius: 4, maxBarThickness: 45 },
+                    { label: 'Done', data: doneData, backgroundColor: '#4a1c2e', borderRadius: 4, maxBarThickness: 45 }
                 ]
             },
             options: {
@@ -383,9 +383,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     label: 'Completion %',
                     data: filteredProjects.map(p => p.progress),
                     backgroundColor: filteredProjects.map(p => {
-                        if (p.progress === 100) return '#22c55e'; 
-                        if (p.progress > 0) return '#0ea5e9'; 
-                        return '#cbd5e1'; 
+                        if (p.progress === 100) return '#4a1c2e'; 
+                        if (p.progress > 0) return '#6b2d4a'; 
+                        return '#d4a0b5'; 
                     }),
                     borderRadius: 4,
                     maxBarThickness: 30
@@ -448,7 +448,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             grid.innerHTML += `
                 <div class="col-md-6 col-lg-4">
-                    <div class="card h-100 border-0 shadow-sm" style="border-radius:10px; border-left: 4px solid ${t.status === 'Done' ? '#22c55e' : (t.status === 'In Progress' ? '#f59e0b' : '#ef4444')} !important;">
+                    <div class="card h-100 border-0 shadow-sm" style="border-radius:10px; border-left: 4px solid ${t.status === 'Done' ? '#4a1c2e' : (t.status === 'In Progress' ? '#9c5070' : '#1a0a10')} !important;">
                         <div class="card-body p-3">
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <h6 class="fw-bold mb-0 text-truncate" style="max-width:70%;" title="${t.title}">${t.title}</h6>

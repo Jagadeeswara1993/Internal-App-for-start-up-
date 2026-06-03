@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Leave Balance — Enterprise Portal{% endblock %}
+{% block title %}Leave Balance — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Leave Balance{% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@
 
 <!-- Leave Cycle Info Banner -->
 {% if cycle_info %}
-<div style="background:linear-gradient(135deg,#312e81,#4338ca); border-radius:14px; padding:16px 22px; margin-bottom:20px; color:#fff;">
+<div style="background:linear-gradient(135deg,#1a0a10,#2a1018); border-radius:14px; padding:16px 22px; margin-bottom:20px; color:#fff;">
     <div class="d-flex align-items-center gap-3 flex-wrap">
         <div style="width:36px; height:36px; background:rgba(255,255,255,0.15); border-radius:8px; display:flex; align-items:center; justify-content:center;">
             <i class="fas fa-calendar-alt"></i>
@@ -47,7 +47,7 @@
                     </div>
                     {% if bal.carried_forward and bal.carried_forward > 0 %}
                     <div class="col-3 text-center">
-                        <div class="fw-bold" style="color:#8b5cf6;">+{{ bal.carried_forward | round(1) }}</div>
+                        <div class="fw-bold" style="color:#6b2d4a;">+{{ bal.carried_forward | round(1) }}</div>
                         <div style="color:var(--text-secondary); font-size:0.72rem;">Carried</div>
                     </div>
                     <div class="col-3 text-center">
@@ -99,14 +99,14 @@
                         {% if policy.is_calendar_days %}
                         <span class="badge" style="background:#0ea5e9; color:#fff; font-size:0.72rem;"><i class="fas fa-calendar me-1"></i>Calendar</span>
                         {% else %}
-                        <span class="badge" style="background:#64748b; color:#fff; font-size:0.72rem;"><i class="fas fa-briefcase me-1"></i>Working</span>
+                        <span class="badge" style="background:#6b2d4a; color:#fff; font-size:0.72rem;"><i class="fas fa-briefcase me-1"></i>Working</span>
                         {% endif %}
                     </td>
                     <td>
                         {% if policy.is_prorated %}
                         <span class="badge" style="background:#16a34a; color:#fff; font-size:0.72rem;"><i class="fas fa-chart-line me-1"></i>Pro-rated</span>
                         {% else %}
-                        <span class="badge" style="background:#94a3b8; color:#fff; font-size:0.72rem;">Full</span>
+                        <span class="badge" style="background:#9c5070; color:#fff; font-size:0.72rem;">Full</span>
                         {% endif %}
                     </td>
                     <td>{% if policy.carry_forward %}<span class="badge-status badge-approved">Yes (max {{ policy.max_carry_days }})</span>{% else %}<span class="badge-status badge-rejected">No</span>{% endif %}</td>

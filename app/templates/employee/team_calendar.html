@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Team Leave Calendar — Enterprise Portal{% endblock %}
+{% block title %}Team Leave Calendar — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Team Leave Calendar{% endblock %}
 
 {% block content %}
@@ -88,13 +88,13 @@
     .state-weekend {
         background-color: rgba(241, 245, 249, 0.5);
         border-color: rgba(226, 232, 240, 0.7);
-        color: #64748b;
+        color: #6b2d4a;
     }
 
     /* Badge indicators */
     .badge-present {
         background-color: rgba(16, 185, 129, 0.1);
-        color: #059669;
+        color: #4a1c2e;
         font-size: 0.72rem;
         padding: 3px 6px;
         border-radius: 4px;
@@ -103,7 +103,7 @@
     }
     .badge-absent {
         background-color: rgba(239, 68, 68, 0.1);
-        color: #dc2626;
+        color: #1a0a10;
         font-size: 0.72rem;
         padding: 3px 6px;
         border-radius: 4px;
@@ -194,7 +194,7 @@
                     <i class="fas fa-chevron-right"></i>
                 </a>
             </div>
-            <h5 style="margin:0; font-weight:700; color:#1e293b; white-space:nowrap;">{{ month_name }}</h5>
+            <h5 style="margin:0; font-weight:700; color:#2a1018; white-space:nowrap;">{{ month_name }}</h5>
         </div>
         <div class="text-secondary" style="font-size: 0.85rem; font-weight: 500;">
             <i class="fas fa-users me-1"></i>Total Direct Reports: <strong>{{ total_team }}</strong>
@@ -215,15 +215,15 @@
                 <span>On Approved Leave</span>
             </div>
             <div class="legend-item">
-                <div class="legend-dot" style="background-color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);"></div>
+                <div class="legend-dot" style="background-color: #9c5070; border: 1px solid rgba(245,158,11,0.3);"></div>
                 <span>Half-Day Absence</span>
             </div>
             <div class="legend-item">
-                <div class="legend-dot" style="background-color: #6366f1; border: 1px solid rgba(99,102,241,0.3);"></div>
+                <div class="legend-dot" style="background-color: #1a0a10; border: 1px solid rgba(15,23,42,0.3);"></div>
                 <span>Company Holiday</span>
             </div>
             <div class="legend-item">
-                <div class="legend-dot" style="background-color: #cbd5e1; border: 1px solid rgba(148,163,184,0.3);"></div>
+                <div class="legend-dot" style="background-color: #d4a0b5; border: 1px solid rgba(148,163,184,0.3);"></div>
                 <span>Weekend</span>
             </div>
         </div>
@@ -242,8 +242,8 @@
         <div class="calendar-header-day">Wed</div>
         <div class="calendar-header-day">Thu</div>
         <div class="calendar-header-day">Fri</div>
-        <div class="calendar-header-day" style="color: #64748b;">Sat</div>
-        <div class="calendar-header-day" style="color: #64748b;">Sun</div>
+        <div class="calendar-header-day" style="color: #6b2d4a;">Sat</div>
+        <div class="calendar-header-day" style="color: #6b2d4a;">Sun</div>
 
         <!-- Spacers for first weekday -->
         {% for _ in range(first_weekday) %}
@@ -276,7 +276,7 @@
 
                 <div class="mt-2 text-start">
                     {% if day.is_weekend %}
-                        <span style="font-size: 0.72rem; color: #94a3b8; font-weight: 600;">Weekend</span>
+                        <span style="font-size: 0.72rem; color: #9c5070; font-weight: 600;">Weekend</span>
                     {% elif day.is_holiday %}
                         <span class="badge-holiday-ind" title="{{ day.holiday_name }}">
                             <i class="fas fa-umbrella-beach me-1"></i>{{ day.holiday_name }}
@@ -310,8 +310,8 @@
 <div class="modal fade" id="absenceModal" tabindex="-1" aria-labelledby="absenceModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
-            <div class="modal-header" style="border-bottom: 1px solid rgba(0,0,0,0.06); background-color: #f8fafc; border-top-left-radius: 12px; border-top-right-radius: 12px; padding: 16px 20px;">
-                <h6 class="modal-title" id="absenceModalLabel" style="font-weight: 700; color: #1e293b; margin: 0;">Day Details</h6>
+            <div class="modal-header" style="border-bottom: 1px solid rgba(0,0,0,0.06); background-color: #f5e8ee; border-top-left-radius: 12px; border-top-right-radius: 12px; padding: 16px 20px;">
+                <h6 class="modal-title" id="absenceModalLabel" style="font-weight: 700; color: #2a1018; margin: 0;">Day Details</h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body" style="padding: 20px;">
@@ -319,12 +319,12 @@
                 
                 <!-- Present Stats -->
                 <div class="p-3 mb-3 bg-light rounded d-flex justify-content-between align-items-center" style="font-size: 0.85rem;">
-                    <span style="font-weight: 600; color: #475569;">Direct Reports Present</span>
+                    <span style="font-weight: 600; color: #4a1c2e;">Direct Reports Present</span>
                     <span id="modalPresentCount" class="badge bg-success" style="font-size: 0.85rem; padding: 4px 8px; font-weight: 700;">-</span>
                 </div>
 
                 <div id="absenceListContainer">
-                    <h6 style="font-weight: 700; font-size: 0.85rem; color: #334155; margin-bottom: 12px;" id="absenceTitle">Team Absences</h6>
+                    <h6 style="font-weight: 700; font-size: 0.85rem; color: #4a1c2e; margin-bottom: 12px;" id="absenceTitle">Team Absences</h6>
                     <div id="absenceList" class="d-flex flex-column gap-2">
                         <!-- Filled dynamically -->
                     </div>
@@ -407,7 +407,7 @@
                 
                 row.innerHTML = `
                     <div>
-                        <div style="font-weight: 600; font-size: 0.9rem; color: #1e293b;">${abs.name}</div>
+                        <div style="font-weight: 600; font-size: 0.9rem; color: #2a1018;">${abs.name}</div>
                         <div style="font-size: 0.75rem; color: var(--text-secondary);">
                             <span>${abs.emp_code}</span> · <span class="badge bg-light text-dark">${abs.dept}</span>
                         </div>

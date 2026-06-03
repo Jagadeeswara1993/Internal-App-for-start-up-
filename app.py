@@ -1,4 +1,4 @@
-"""Entry point — run the Enterprise Portal."""
+"""Entry point — run J G PROJECT CONSULTANTS."""
 
 from dotenv import load_dotenv
 load_dotenv()  # Load .env file before anything else

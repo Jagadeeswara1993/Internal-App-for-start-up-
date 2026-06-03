@@ -41,7 +41,7 @@ def send_reset_email(user, token):
     reset_url = url_for('auth.reset_password', token=token, _external=True)
 
     msg = Message(
-        subject='Password Reset — Enterprise Portal',
+        subject='Password Reset — J G PROJECT CONSULTANTS',
         recipients=[user.email],
         reply_to='noreply@enterpriseportal.com',
     )
@@ -50,7 +50,7 @@ def send_reset_email(user, token):
                 padding:32px; background:#ffffff; border-radius:12px;
                 box-shadow:0 4px 16px rgba(0,0,0,0.08);">
         <div style="text-align:center; margin-bottom:24px;">
-            <div style="width:56px; height:56px; background:linear-gradient(135deg,#2563eb,#6366f1);
+            <div style="width:56px; height:56px; background:linear-gradient(135deg,#475569,#334155);
                         border-radius:14px; display:inline-flex; align-items:center;
                         justify-content:center; color:#fff; font-size:1.5rem;">
                 🔐
@@ -62,9 +62,9 @@ def send_reset_email(user, token):
         </p>
         <div style="text-align:center; margin-bottom:24px;">
             <a href="{reset_url}"
-               style="display:inline-block; padding:14px 32px; background:linear-gradient(135deg,#2563eb,#6366f1);
-                      color:#ffffff; text-decoration:none; border-radius:10px; font-weight:600;
-                      font-size:0.95rem; box-shadow:0 4px 12px rgba(37,99,235,0.35);">
+               style="display:inline-block; padding:14px 32px; background:linear-gradient(135deg,#f97316,#ea580c);
+                       color:#ffffff; text-decoration:none; border-radius:10px; font-weight:600;
+                       font-size:0.95rem; box-shadow:0 4px 12px rgba(249,115,22,0.35);">
                 Reset My Password
             </a>
         </div>
@@ -73,7 +73,7 @@ def send_reset_email(user, token):
         </p>
         <hr style="border:none; border-top:1px solid #f1f5f9; margin:20px 0;">
         <p style="color:#cbd5e1; font-size:0.75rem; text-align:center;">
-            Enterprise Portal &bull; Secured Access
+            J G PROJECT CONSULTANTS &bull; Secured Access
         </p>
         <p style="color:#cbd5e1; font-size:0.7rem; text-align:center; margin-top:8px;">
             ⚠ This is an automated message. Please do not reply to this email.

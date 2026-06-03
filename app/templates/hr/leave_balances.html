@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Leave Balances — Enterprise Portal{% endblock %}
+{% block title %}Leave Balances — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Leave Balances{% endblock %}
 
 {% block content %}
@@ -55,7 +55,7 @@
                     {% set bal = row.balances.get(p.leave_type) %}
                     <td style="text-align:center;">
                         {% if bal %}
-                        <div style="font-size:1rem; font-weight:700; color:{% if bal.remaining > 5 %}var(--success){% elif bal.remaining > 0 %}#f59e0b{% else %}var(--danger){% endif %};">
+                        <div style="font-size:1rem; font-weight:700; color:{% if bal.remaining > 5 %}var(--success){% elif bal.remaining > 0 %}#9c5070{% else %}var(--danger){% endif %};">
                             {{ bal.remaining | round(1) }}
                         </div>
                         <div style="font-size:0.65rem; color:var(--text-secondary);">{{ bal.used | round(1) }}/{{ bal.total_allocated | round(1) }} used</div>

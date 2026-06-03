@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Employees — Enterprise Portal{% endblock %}
+{% block title %}Employees — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Employees{% endblock %}
 
 {% block content %}
@@ -77,14 +77,14 @@
                         {% if emp.department %}
                         <span class="badge bg-light text-dark border" style="font-size:0.75rem;">{{ emp.department_name }}</span>
                         {% else %}
-                        <span class="badge" style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; font-size:0.75rem;">Unassigned</span>
+                        <span class="badge" style="background:#fef2f2; color:#1a0a10; border:1px solid #fecaca; font-size:0.75rem;">Unassigned</span>
                         {% endif %}
                     </td>
                     <td style="font-size:0.88rem;">
                         {% if emp.designation %}
                         {{ emp.designation_title }}
                         {% else %}
-                        <span style="color:#dc2626; font-size:0.82rem;">Unassigned</span>
+                        <span style="color:#1a0a10; font-size:0.82rem;">Unassigned</span>
                         {% endif %}
                     </td>
                     <td>{{ emp.date_of_joining.strftime('%d %b %Y') if emp.date_of_joining else '—' }}</td>
@@ -111,7 +111,7 @@
                             {% else %}
                             <a href="{{ url_for('hr.complete_profile', emp_id=emp.id) }}"
                                class="btn-action" title="Complete Profile"
-                               style="color:#f59e0b; font-weight:600;">
+                               style="color:#9c5070; font-weight:600;">
                                 <i class="fas fa-clipboard-check"></i>
                             </a>
                             {% endif %}

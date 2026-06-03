@@ -444,7 +444,7 @@ def get_salaries(filters=None, page=1, per_page=20):
         'September': 9, 'October': 10, 'November': 11, 'December': 12
     }
     # SQLite/Dialect-safe ordering using case statement mapping
-    case_stmt = db.case(whens={m: n for m, n in month_map.items()}, value=SalaryRecord.month, else_=0)
+    case_stmt = db.case({m: n for m, n in month_map.items()}, value=SalaryRecord.month, else_=0)
     
     if filters:
         if filters.get('status'):

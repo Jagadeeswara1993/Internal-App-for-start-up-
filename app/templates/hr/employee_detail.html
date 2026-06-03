@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ employee.user.full_name }} — Enterprise Portal{% endblock %}
+{% block title %}{{ employee.user.full_name }} — J G PROJECT CONSULTANTS{% endblock %}
 {% block page_title %}Employee Profile{% endblock %}
 
 {% block content %}
@@ -69,7 +69,7 @@
                         <div style="font-size:0.75rem; color:var(--text-secondary);">Used {{ bal.used | round(1) }} / {{ bal.total_allocated | round(1) }}</div>
                     </div>
                     <div>
-                        <span style="font-size:1.3rem; font-weight:700; color:{% if bal.remaining > 5 %}var(--success){% elif bal.remaining > 0 %}#f59e0b{% else %}var(--danger){% endif %};">
+                        <span style="font-size:1.3rem; font-weight:700; color:{% if bal.remaining > 5 %}var(--success){% elif bal.remaining > 0 %}#9c5070{% else %}var(--danger){% endif %};">
                             {{ bal.remaining | round(1) }}
                         </span>
                         <span style="font-size:0.7rem; color:var(--text-secondary);">left</span>
@@ -122,7 +122,7 @@
                     <td>{{ l.end_date.strftime('%d %b %Y') }}</td>
                     <td>
                         {{ (l.total_days or l.calc_days()) | round(1) }}
-                        {% if l.is_half_day %}<span class="badge" style="background:#d946ef; color:#fff; font-size:0.6rem;">Half</span>{% endif %}
+                        {% if l.is_half_day %}<span class="badge" style="background:#9c5070; color:#fff; font-size:0.6rem;">Half</span>{% endif %}
                     </td>
                     <td><span class="badge-status badge-{{ l.status | lower }}">{{ l.status }}</span></td>
                     <td style="color:var(--text-secondary);">{{ l.reason[:50] }}{% if l.reason|length > 50 %}...{% endif %}</td>
