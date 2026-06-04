@@ -10,21 +10,21 @@
   --primary-light: #7DA0CA;
   --secondary: #5483B3;
   --accent: #C1E8FF;
-  --success: #5483B3;
-  --danger: #021024;
-  --warning: #7DA0CA;
+  --success: #059669;
+  --danger: #DC2626;
+  --warning: #D97706;
   --info: #5483B3;
 
   --sidebar-bg: #021024;
   --sidebar-hover: #052659;
-  --sidebar-text: #7DA0CA;
+  --sidebar-text: #94B8D9;
   --sidebar-active: #C1E8FF;
   --sidebar-active-text: #021024;
   --sidebar-width: 250px;
 
   --body-bg: #5483B3;
   --main-content-bg: #C1E8FF;
-  --card-bg: #C1E8FF;
+  --card-bg: #F0F7FF;
   --text-primary: #021024;
   --text-secondary: #052659;
   --border-color: #7DA0CA;
@@ -103,7 +103,7 @@ body {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(199, 210, 254, 0.5);
+  color: rgba(199, 210, 254, 0.65);
   padding: 8px 12px 6px;
   margin-top: 8px;
 }
@@ -391,10 +391,10 @@ body {
 }
 
 .stat-card.purple::before  { background: linear-gradient(90deg, var(--primary), var(--primary-dark)); }
-.stat-card.blue::before    { background: linear-gradient(90deg, var(--accent), var(--warning)); }
+.stat-card.blue::before    { background: linear-gradient(90deg, var(--primary-light), var(--primary)); }
 .stat-card.green::before   { background: linear-gradient(90deg, var(--success), var(--primary-dark)); }
-.stat-card.orange::before  { background: linear-gradient(90deg, var(--accent), var(--warning)); }
-.stat-card.pink::before    { background: linear-gradient(90deg, var(--accent), var(--danger)); }
+.stat-card.orange::before  { background: linear-gradient(90deg, var(--warning), #b45309); }
+.stat-card.pink::before    { background: linear-gradient(90deg, var(--danger), #991b1b); }
 .stat-card.teal::before    { background: linear-gradient(90deg, var(--primary-light), var(--primary)); }
 
 .stat-card .stat-icon {
@@ -409,10 +409,10 @@ body {
 }
 
 .stat-card.purple .stat-icon  { background: rgba(15, 23, 42, 0.08); color: var(--primary); }
-.stat-card.blue .stat-icon    { background: rgba(249, 115, 22, 0.12); color: var(--accent); }
+.stat-card.blue .stat-icon    { background: rgba(5, 38, 89, 0.08); color: var(--primary); }
 .stat-card.green .stat-icon   { background: rgba(5, 150, 105, 0.08); color: var(--success); }
-.stat-card.orange .stat-icon  { background: rgba(249, 115, 22, 0.12); color: var(--accent); }
-.stat-card.pink .stat-icon    { background: rgba(249, 115, 22, 0.12); color: var(--accent); }
+.stat-card.orange .stat-icon  { background: rgba(217, 119, 6, 0.1); color: var(--warning); }
+.stat-card.pink .stat-icon    { background: rgba(220, 38, 38, 0.08); color: var(--danger); }
 .stat-card.teal .stat-icon    { background: rgba(2, 132, 199, 0.08); color: var(--info); }
 
 .stat-card .stat-value {
@@ -654,8 +654,8 @@ body {
 }
 
 .btn-outline-primary {
-  border: 1.5px solid var(--accent);
-  color: var(--accent);
+  border: 1.5px solid var(--primary);
+  color: var(--primary);
   border-radius: 8px;
   padding: 8px 18px;
   font-weight: 600;
@@ -664,9 +664,77 @@ body {
 }
 
 .btn-outline-primary:hover {
-  background: var(--accent);
+  background: var(--primary);
   color: #fff;
-  border-color: var(--accent);
+  border-color: var(--primary);
+}
+
+/* Secondary outline buttons — slate gray on white/light cards */
+.btn-outline-secondary {
+  border: 1.5px solid #94a3b8;
+  color: #475569;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: var(--transition);
+}
+
+.btn-outline-secondary:hover {
+  background: #475569;
+  color: #fff;
+  border-color: #475569;
+}
+
+/* Success outline buttons — emerald on white/light cards */
+.btn-outline-success {
+  border: 1.5px solid #059669;
+  color: #059669;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: var(--transition);
+}
+
+.btn-outline-success:hover {
+  background: #059669;
+  color: #fff;
+  border-color: #059669;
+}
+
+/* Danger outline buttons — red */
+.btn-outline-danger {
+  border: 1.5px solid #DC2626;
+  color: #DC2626;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: var(--transition);
+}
+
+.btn-outline-danger:hover {
+  background: #DC2626;
+  color: #fff;
+  border-color: #DC2626;
+}
+
+/* Warning outline buttons — amber */
+.btn-outline-warning {
+  border: 1.5px solid #D97706;
+  color: #D97706;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: var(--transition);
+}
+
+.btn-outline-warning:hover {
+  background: #D97706;
+  color: #fff;
+  border-color: #D97706;
 }
 
 .btn-sm {
@@ -690,14 +758,14 @@ body {
 }
 
 .btn-action:hover {
-  background: var(--accent);
+  background: var(--primary);
   color: white;
-  border-color: var(--accent);
+  border-color: var(--primary);
 }
 
 .btn-action.danger:hover {
-  background: var(--danger);
-  border-color: var(--danger);
+  background: #DC2626;
+  border-color: #DC2626;
 }
 
 /* ── Login Page ────────────────────────────────────────────────────────── */

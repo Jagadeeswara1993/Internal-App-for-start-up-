@@ -52,8 +52,58 @@ class Invoice(db.Model):
     status = db.Column(db.String(20), default='Unpaid')      # Unpaid, Paid, Overdue, Cancelled
     description = db.Column(db.Text, default='')
 
+    line_items = db.relationship('InvoiceLineItem', back_populates='invoice', cascade='all, delete-orphan')
+    payments = db.relationship('InvoicePayment', back_populates='invoice', cascade='all, delete-orphan')
+
+    @property
+    def total_paid(self):
+        return sum(p.amount for p in self.payments)
+
+    @property
+    def balance_due(self):
+        return max(0.0, self.amount - self.total_paid)
+
     def __repr__(self):
         return f'<Invoice {self.invoice_number}>'
+
+
+# ---------------------------------------------------------------------------
+# InvoiceLineItem
+# ---------------------------------------------------------------------------
+class InvoiceLineItem(db.Model):
+    __tablename__ = 'invoice_line_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id', ondelete='CASCADE'), nullable=False)
+    description = db.Column(db.String(250), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    unit_price = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+
+    invoice = db.relationship('Invoice', back_populates='line_items')
+
+    def __repr__(self):
+        return f'<InvoiceLineItem {self.id} for Invoice {self.invoice_id}>'
+
+
+# ---------------------------------------------------------------------------
+# InvoicePayment
+# ---------------------------------------------------------------------------
+class InvoicePayment(db.Model):
+    __tablename__ = 'invoice_payments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoices.id', ondelete='CASCADE'), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
+    payment_date = db.Column(db.Date, nullable=False, default=date.today)
+    payment_method = db.Column(db.String(30), nullable=False)  # Bank Transfer, Cheque, Cash, UPI
+    reference_number = db.Column(db.String(50), nullable=True)
+    notes = db.Column(db.Text, default='')
+
+    invoice = db.relationship('Invoice', back_populates='payments')
+
+    def __repr__(self):
+        return f'<InvoicePayment {self.id} ₹{self.amount} for Invoice {self.invoice_id}>'
 
 
 # ---------------------------------------------------------------------------

@@ -60,3 +60,17 @@ class SalaryForm(FlaskForm):
         ('Pending', 'Pending'), ('Processed', 'Processed'), ('Paid', 'Paid')
     ])
     submit = SubmitField('Save Record')
+
+
+class PaymentForm(FlaskForm):
+    amount = FloatField('Amount (₹)', validators=[DataRequired()])
+    payment_date = DateField('Payment Date', validators=[DataRequired()])
+    payment_method = SelectField('Payment Method', choices=[
+        ('Bank Transfer', 'Bank Transfer'),
+        ('Cheque', 'Cheque'),
+        ('Cash', 'Cash'),
+        ('UPI', 'UPI')
+    ], validators=[DataRequired()])
+    reference_number = StringField('Reference Number', validators=[Optional(), Length(max=50)])
+    notes = TextAreaField('Notes', validators=[Optional()])
+    submit = SubmitField('Record Payment')

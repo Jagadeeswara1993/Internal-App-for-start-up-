@@ -79,7 +79,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for item in line_items %}
+                {% for item in invoice.line_items %}
                 <tr>
                     <td class="text-muted">{{ loop.index }}</td>
                     <td class="fw-medium">{{ item.description }}</td>
@@ -95,7 +95,7 @@
                 </tr>
                 {% endfor %}
             </tbody>
-            {% if line_items %}
+            {% if invoice.line_items %}
             <tfoot>
                 <tr style="border-top:2px solid var(--border-color);">
                     <td colspan="4" class="text-end fw-bold">Total</td>
@@ -125,7 +125,7 @@
                 </tr>
             </thead>
             <tbody>
-                {% for p in payments %}
+                {% for p in invoice.payments %}
                 <tr>
                     <td class="text-muted">{{ loop.index }}</td>
                     <td class="fw-medium">{{ p.payment_date.strftime('%d %b %Y') if p.payment_date else '—' }}</td>
@@ -155,7 +155,7 @@
                 </tr>
                 {% endfor %}
             </tbody>
-            {% if payments %}
+            {% if invoice.payments %}
             <tfoot>
                 <tr style="border-top:2px solid var(--border-color);">
                     <td colspan="4" class="text-end fw-bold">Total Received</td>

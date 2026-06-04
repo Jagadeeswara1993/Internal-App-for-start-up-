@@ -266,7 +266,7 @@
 
         <!-- Days -->
         {% for day in calendar_data %}
-            {% set cell_class = "state-present" %}
+            {% set cell_class = "" %}
             {% if day.is_weekend %}
                 {% set cell_class = "state-weekend" %}
             {% elif day.is_holiday %}
@@ -276,6 +276,10 @@
                     {% set cell_class = "state-halfday" %}
                 {% else %}
                     {% set cell_class = "state-leave" %}
+                {% endif %}
+            {% else %}
+                {% if not day.is_future %}
+                    {% set cell_class = "state-present" %}
                 {% endif %}
             {% endif %}
 
@@ -309,9 +313,11 @@
                                 </div>
                             {% endif %}
                         {% else %}
+                            {% if not day.is_future %}
                             <div class="badge-present">
                                 <i class="fas fa-user-check me-1"></i>{{ day.present_count }} Present
                             </div>
+                            {% endif %}
                         {% endif %}
                     {% endif %}
                 </div>
@@ -379,6 +385,9 @@
         const presentCountEl = document.getElementById('modalPresentCount');
         if (dayData.is_weekend || dayData.is_holiday) {
             presentCountEl.innerText = "0 (Non-working)";
+            presentCountEl.className = "badge bg-secondary";
+        } else if (dayData.is_future) {
+            presentCountEl.innerText = "N/A (Future Date)";
             presentCountEl.className = "badge bg-secondary";
         } else {
             presentCountEl.innerText = dayData.present_count;

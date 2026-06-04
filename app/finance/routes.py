@@ -1,18 +1,22 @@
 """Finance routes — salaries, expenses, invoices."""
 
-from flask import render_template, redirect, url_for, flash, request
+from datetime import date
+from flask import render_template, redirect, url_for, flash, request, current_app, send_from_directory
 from flask_login import current_user
 from app.finance import bp
 from app.decorators import module_required
 from app.extensions import db
 from app.models import Expense, Invoice, SalaryRecord, Employee, EmployeeExpense, PayrollInput
-from app.finance.forms import ExpenseForm, EmployeeExpenseForm, InvoiceForm, SalaryForm
+from app.finance.forms import ExpenseForm, EmployeeExpenseForm, InvoiceForm, SalaryForm, PaymentForm
 from app.finance import services
 
 
 @bp.route('/')
 @module_required('finance')
 def dashboard():
+    overdue_count = services.detect_and_update_overdue_invoices()
+    if overdue_count > 0:
+        db.session.commit()
     total_expenses = db.session.query(db.func.coalesce(db.func.sum(Expense.amount), 0)).scalar()
     pending_expenses = Expense.query.filter_by(status='Pending').count()
     total_invoiced = db.session.query(db.func.coalesce(db.func.sum(Invoice.amount), 0)).scalar()
@@ -123,17 +127,21 @@ def reject_expense(expense_id):
 def employee_expenses():
     category = request.args.get('category', '').strip()
     status = request.args.get('status', '').strip()
+    payment_status = request.args.get('payment_status', '').strip()
     date_from = request.args.get('date_from', '').strip()
     date_to = request.args.get('date_to', '').strip()
+    employee_search = request.args.get('employee_search', '').strip()
     employee_id = request.args.get('employee_id', type=int)
     page = request.args.get('page', 1, type=int)
 
     filters = {
         'category': category,
         'status': status,
+        'payment_status': payment_status,
         'date_from': date_from,
         'date_to': date_to,
-        'employee_id': employee_id
+        'employee_id': employee_id,
+        'employee_search': employee_search
     }
     paginated_claims = services.get_employee_expenses(filters, page=page, per_page=20)
     employees = Employee.query.order_by(Employee.emp_code).all()
@@ -142,9 +150,31 @@ def employee_expenses():
                            employees=employees,
                            selected_category=category,
                            selected_status=status,
+                           selected_payment_status=payment_status,
                            selected_employee=employee_id,
+                           employee_search=employee_search,
                            date_from=date_from,
                            date_to=date_to)
+
+
+@bp.route('/employee-expenses/<int:claim_id>')
+@module_required('finance')
+def employee_expense_detail(claim_id):
+    claim = EmployeeExpense.query.get_or_404(claim_id)
+    return render_template('finance/employee_expense_detail.html', claim=claim)
+
+
+@bp.route('/employee-expenses/<int:claim_id>/receipt')
+@module_required('finance')
+def employee_expense_receipt(claim_id):
+    import os
+    claim = EmployeeExpense.query.get_or_404(claim_id)
+    if not claim.receipt_filename:
+        flash('No receipt attached to this claim.', 'warning')
+        return redirect(url_for('finance.employee_expense_detail', claim_id=claim_id))
+    upload_folder = current_app.config.get('UPLOAD_FOLDER', 'static/uploads/documents')
+    return send_from_directory(upload_folder, claim.receipt_filename,
+                               as_attachment=True, download_name=claim.receipt_original or claim.receipt_filename)
 
 
 @bp.route('/employee-expenses/<int:claim_id>/approve', methods=['POST'])
@@ -153,16 +183,38 @@ def approve_employee_expense(claim_id):
     services.approve_employee_expense(claim_id, current_user.id, request.remote_addr or '')
     db.session.commit()
     flash('Employee expense claim approved.', 'success')
-    return redirect(url_for('finance.employee_expenses'))
+    # Redirect back to referrer if from list page, otherwise to detail
+    referrer = request.referrer or ''
+    if 'employee-expenses' in referrer and str(claim_id) not in referrer:
+        return redirect(url_for('finance.employee_expenses'))
+    return redirect(url_for('finance.employee_expense_detail', claim_id=claim_id))
 
 
 @bp.route('/employee-expenses/<int:claim_id>/reject', methods=['POST'])
 @module_required('finance')
 def reject_employee_expense(claim_id):
-    services.reject_employee_expense(claim_id, current_user.id, request.remote_addr or '')
+    rejection_notes = request.form.get('rejection_notes', '').strip()
+    services.reject_employee_expense(claim_id, current_user.id, rejection_notes=rejection_notes, ip_address=request.remote_addr or '')
     db.session.commit()
     flash('Employee expense claim rejected.', 'warning')
-    return redirect(url_for('finance.employee_expenses'))
+    # Redirect back to referrer if from list page, otherwise to detail
+    referrer = request.referrer or ''
+    if 'employee-expenses' in referrer and str(claim_id) not in referrer:
+        return redirect(url_for('finance.employee_expenses'))
+    return redirect(url_for('finance.employee_expense_detail', claim_id=claim_id))
+
+
+@bp.route('/employee-expenses/<int:claim_id>/mark-paid', methods=['POST'])
+@module_required('finance')
+def mark_employee_expense_paid(claim_id):
+    payment_reference = request.form.get('payment_reference', '').strip()
+    claim, err = services.mark_employee_expense_paid(claim_id, payment_reference, current_user.id, request.remote_addr or '')
+    if err:
+        flash(err, 'danger')
+    else:
+        db.session.commit()
+        flash(f'Expense claim for {claim.employee.user.full_name} marked as reimbursed.', 'success')
+    return redirect(url_for('finance.employee_expense_detail', claim_id=claim_id))
 
 
 @bp.route('/employee-expenses/<int:claim_id>/edit', methods=['GET', 'POST'])
@@ -190,6 +242,9 @@ def edit_employee_expense(claim_id):
 @bp.route('/invoices')
 @module_required('finance')
 def invoices():
+    overdue_count = services.detect_and_update_overdue_invoices()
+    if overdue_count > 0:
+        db.session.commit()
     status = request.args.get('status', '').strip()
     client_name = request.args.get('client_name', '').strip()
     date_from = request.args.get('date_from', '').strip()
@@ -261,6 +316,54 @@ def edit_invoice(invoice_id):
         flash(f'Invoice {updated_invoice.invoice_number} updated.', 'success')
         return redirect(url_for('finance.invoices'))
     return render_template('finance/invoice_form.html', form=form, title='Edit Invoice', invoice=invoice)
+
+
+@bp.route('/invoices/<int:invoice_id>/detail')
+@module_required('finance')
+def invoice_detail(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    payment_form = PaymentForm()
+    payment_form.payment_date.data = date.today()
+    payment_form.amount.data = invoice.balance_due
+    return render_template('finance/invoice_detail.html',
+                           invoice=invoice,
+                           form=payment_form)
+
+
+@bp.route('/invoices/<int:invoice_id>/record-payment', methods=['POST'])
+@module_required('finance')
+def record_payment(invoice_id):
+    form = PaymentForm()
+    if form.validate_on_submit():
+        services.record_payment(
+            invoice_id=invoice_id,
+            amount=form.amount.data,
+            payment_date=form.payment_date.data,
+            payment_method=form.payment_method.data,
+            reference_number=form.reference_number.data,
+            notes=form.notes.data,
+            user_id=current_user.id,
+            ip_address=request.remote_addr or ''
+        )
+        db.session.commit()
+        flash('Payment recorded.', 'success')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                flash(f"Error in field '{field}': {error}", 'danger')
+    return redirect(url_for('finance.invoice_detail', invoice_id=invoice_id))
+
+
+@bp.route('/invoices/<int:invoice_id>/delete', methods=['POST'])
+@module_required('finance')
+def delete_invoice(invoice_id):
+    success, err = services.delete_invoice(invoice_id, current_user.id, request.remote_addr or '')
+    if err:
+        flash(err, 'danger')
+    else:
+        db.session.commit()
+        flash('Invoice deleted.', 'success')
+    return redirect(url_for('finance.invoices'))
 
 
 # ── Salaries ─────────────────────────────────────────────────────────────────

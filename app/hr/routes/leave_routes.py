@@ -179,6 +179,7 @@ def leave_calendar():
             'is_holiday': is_holiday,
             'holiday_name': holiday_map.get(day, ''),
             'is_today': d == date.today(),
+            'is_future': d > date.today(),
             'absent_count': absent_count,
             'half_day_count': half_day_count,
             'present_count': max(0, total_employees - absent_count) if not is_weekend and not is_holiday else 0,

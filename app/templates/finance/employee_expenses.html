@@ -14,13 +14,9 @@
 <div class="data-card mb-4" style="padding:16px 20px;">
     <form method="GET" class="row g-2 align-items-end">
         <div class="col-md-2">
-            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Employee</label>
-            <select name="employee_id" class="form-select form-select-sm">
-                <option value="">All</option>
-                {% for emp in employees %}
-                <option value="{{ emp.id }}" {% if selected_employee == emp.id %}selected{% endif %}>{{ emp.emp_code }} — {{ emp.user.full_name }}</option>
-                {% endfor %}
-            </select>
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Employee Search</label>
+            <input type="text" name="employee_search" class="form-control form-control-sm" 
+                   placeholder="Name or Code..." value="{{ employee_search }}">
         </div>
         <div class="col-md-2">
             <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Category</label>
@@ -31,12 +27,21 @@
                 {% endfor %}
             </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-md-1">
             <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Status</label>
             <select name="status" class="form-select form-select-sm">
                 <option value="">All</option>
                 {% for s in ['Pending', 'Approved', 'Rejected'] %}
                 <option value="{{ s }}" {% if selected_status == s %}selected{% endif %}>{{ s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-1">
+            <label class="form-label" style="font-size:0.8rem; font-weight: 600;">Payment</label>
+            <select name="payment_status" class="form-select form-select-sm">
+                <option value="">All</option>
+                {% for ps in ['Unpaid', 'Paid'] %}
+                <option value="{{ ps }}" {% if selected_payment_status == ps %}selected{% endif %}>{{ ps }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -68,6 +73,7 @@
                     <th>Date</th>
                     <th>Description</th>
                     <th>Status</th>
+                    <th>Payment</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -81,7 +87,20 @@
                     <td style="max-width:200px;">{{ claim.description[:60] }}{% if claim.description|length > 60 %}…{% endif %}</td>
                     <td><span class="badge-status badge-{{ claim.status | lower }}">{{ claim.status }}</span></td>
                     <td>
+                        {% if claim.status == 'Approved' %}
+                        {% set pay_status = claim.payment_status or 'Unpaid' %}
+                        <span class="badge-status badge-{{ 'paid' if pay_status == 'Paid' else 'pending' }}" style="font-size:0.7rem;">
+                            {{ pay_status }}
+                        </span>
+                        {% else %}
+                        <span style="color:var(--text-secondary); font-size:0.8rem;">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
                         <div class="d-flex gap-1">
+                            <a href="{{ url_for('finance.employee_expense_detail', claim_id=claim.id) }}" class="btn-action" title="View Details">
+                                <i class="fas fa-eye"></i>
+                            </a>
                             {% if claim.status == 'Pending' %}
                             <a href="{{ url_for('finance.edit_employee_expense', claim_id=claim.id) }}" class="btn-action" title="Edit">
                                 <i class="fas fa-pen-to-square"></i>
@@ -103,7 +122,7 @@
                     </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="7" class="text-center py-4" style="color:var(--text-secondary);">No employee expenses submitted</td></tr>
+                <tr><td colspan="8" class="text-center py-4" style="color:var(--text-secondary);">No employee expenses submitted</td></tr>
                 {% endfor %}
             </tbody>
         </table>

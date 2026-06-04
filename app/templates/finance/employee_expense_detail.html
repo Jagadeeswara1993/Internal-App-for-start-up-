@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block title %}Expense Claim #{{ claim.id }} — J G PROJECT CONSULTANTS{% endblock %}
+{% block page_title %}Employee Expense Detail{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="{{ url_for('finance.employee_expenses') }}" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-arrow-left me-1"></i>Back to Employee Expenses
+    </a>
+</div>
+
+<!-- Claim Header -->
+<div class="data-card mb-4">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3" style="padding:4px 0;">
+        <div>
+            <h4 class="mb-1" style="font-weight:700;">
+                <i class="fas fa-receipt me-2" style="color:var(--primary);"></i>{{ claim.category }} Expense
+            </h4>
+            <p style="color:var(--text-secondary); font-size:0.9rem; margin:0;">
+                <i class="fas fa-user me-1"></i>{{ claim.employee.user.full_name }} ({{ claim.employee.emp_code }})
+            </p>
+        </div>
+        <div class="text-end d-flex flex-column gap-2 align-items-end">
+            <span class="badge-status badge-{{ claim.status | lower }}" style="font-size:0.9rem; padding:6px 16px;">{{ claim.status }}</span>
+            {% if claim.status == 'Approved' %}
+            {% set pay_status = claim.payment_status or 'Unpaid' %}
+            <span class="badge-status badge-{{ 'paid' if pay_status == 'Paid' else 'pending' }}" style="font-size:0.8rem; padding:4px 12px;">
+                <i class="fas fa-{{ 'check-circle' if pay_status == 'Paid' else 'clock' }} me-1"></i>{{ pay_status }}
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <hr style="margin:16px 0;">
+
+    <div class="row g-4">
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Claim Amount</div>
+            <div style="font-size:1.3rem; font-weight:700; color:var(--primary);">₹{{ "{:,.2f}".format(claim.amount) }}</div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Category</div>
+            <div style="font-size:1.1rem; font-weight:600;">
+                {% if claim.category == 'Travel' %}<i class="fas fa-plane me-1" style="color:#6366f1;"></i>
+                {% elif claim.category == 'Medical' %}<i class="fas fa-medkit me-1" style="color:#ef4444;"></i>
+                {% elif claim.category == 'Software' %}<i class="fas fa-laptop-code me-1" style="color:#3b82f6;"></i>
+                {% elif claim.category == 'Food' %}<i class="fas fa-utensils me-1" style="color:#f59e0b;"></i>
+                {% else %}<i class="fas fa-tag me-1" style="color:#8b5cf6;"></i>
+                {% endif %}
+                {{ claim.category }}
+            </div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Expense Date</div>
+            <div style="font-size:1rem; font-weight:600;">{{ claim.date.strftime('%d %b %Y') if claim.date else '—' }}</div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary); letter-spacing:0.5px;">Submitted On</div>
+            <div style="font-size:1rem; font-weight:600;">{{ claim.created_at.strftime('%d %b %Y, %H:%M') }}</div>
+        </div>
+    </div>
+
+    {% if claim.description %}
+    <div class="mt-3 p-3" style="background:#f8fafc; border-radius:8px; font-size:0.85rem;">
+        <span class="fw-semibold" style="color:var(--text-secondary);">Description:</span>
+        {{ claim.description }}
+    </div>
+    {% endif %}
+</div>
+
+<!-- Employee Info -->
+<div class="data-card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-id-card me-2"></i>Employee Information</h5>
+    </div>
+    <div class="row g-3 p-3" style="font-size:0.9rem;">
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary);">Full Name</div>
+            <div class="fw-semibold">{{ claim.employee.user.full_name }}</div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary);">Employee Code</div>
+            <div class="fw-semibold">{{ claim.employee.emp_code }}</div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary);">Department</div>
+            <div class="fw-semibold">{{ claim.employee.department_name }}</div>
+        </div>
+        <div class="col-sm-6 col-md-3">
+            <div style="font-size:0.75rem; font-weight:600; text-transform:uppercase; color:var(--text-secondary);">Designation</div>
+            <div class="fw-semibold">{{ claim.employee.designation_title }}</div>
+        </div>
+    </div>
+</div>
+
+<!-- Receipt Preview -->
+{% if claim.receipt_filename %}
+<div class="data-card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-file-image me-2"></i>Receipt / Attachment</h5>
+        <a href="{{ url_for('finance.employee_expense_receipt', claim_id=claim.id) }}" class="btn btn-outline-primary btn-sm">
+            <i class="fas fa-download me-1"></i>Download
+        </a>
+    </div>
+    <div class="p-4">
+        <div class="d-flex align-items-center gap-3 mb-3">
+            <i class="fas fa-paperclip" style="font-size:1.2rem; color:var(--primary);"></i>
+            <div>
+                <div class="fw-semibold">{{ claim.receipt_original or claim.receipt_filename }}</div>
+                <div style="font-size:0.8rem; color:var(--text-secondary);">Uploaded with expense claim</div>
+            </div>
+        </div>
+        {% set ext = claim.receipt_filename.rsplit('.', 1)[-1].lower() if '.' in claim.receipt_filename else '' %}
+        {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'] %}
+        <div style="border:1px solid var(--border-color); border-radius:8px; padding:12px; background:#fafafa; text-align:center;">
+            <img src="{{ url_for('static', filename='uploads/documents/' + claim.receipt_filename) }}" 
+                 alt="Receipt" 
+                 style="max-width:100%; max-height:500px; border-radius:6px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
+        </div>
+        {% elif ext == 'pdf' %}
+        <div style="border:1px solid var(--border-color); border-radius:8px; overflow:hidden;">
+            <iframe src="{{ url_for('static', filename='uploads/documents/' + claim.receipt_filename) }}" 
+                    style="width:100%; height:500px; border:none;">
+            </iframe>
+        </div>
+        {% else %}
+        <div class="text-center py-4" style="color:var(--text-secondary);">
+            <i class="fas fa-file fa-3x mb-2" style="color:var(--primary); opacity:0.5;"></i>
+            <p>Preview not available for this file type. Please download to view.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Approval / Rejection History -->
+<div class="data-card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-history me-2"></i>Approval History</h5>
+    </div>
+    <div class="p-4">
+        <!-- Timeline -->
+        <div style="position:relative; padding-left:32px;">
+            <!-- Submitted -->
+            <div style="position:relative; padding-bottom:24px;">
+                <div style="position:absolute; left:-32px; top:2px; width:24px; height:24px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-paper-plane" style="color:#fff; font-size:0.6rem;"></i>
+                </div>
+                {% if claim.status != 'Pending' %}
+                <div style="position:absolute; left:-20px; top:26px; bottom:0; width:2px; background:var(--border-color);"></div>
+                {% endif %}
+                <div>
+                    <div class="fw-semibold" style="font-size:0.9rem;">Submitted</div>
+                    <div style="font-size:0.8rem; color:var(--text-secondary);">
+                        {{ claim.created_at.strftime('%d %b %Y at %H:%M') }} by {{ claim.employee.user.full_name }}
+                    </div>
+                </div>
+            </div>
+
+            {% if claim.status == 'Approved' or claim.status == 'Rejected' %}
+            <!-- Reviewed -->
+            <div style="position:relative; padding-bottom:{% if claim.status == 'Approved' and (claim.payment_status or 'Unpaid') == 'Paid' %}24{% else %}0{% endif %}px;">
+                <div style="position:absolute; left:-32px; top:2px; width:24px; height:24px; border-radius:50%; background:{% if claim.status == 'Approved' %}#16a34a{% else %}#dc2626{% endif %}; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-{{ 'check' if claim.status == 'Approved' else 'times' }}" style="color:#fff; font-size:0.6rem;"></i>
+                </div>
+                {% if claim.status == 'Approved' and (claim.payment_status or 'Unpaid') == 'Paid' %}
+                <div style="position:absolute; left:-20px; top:26px; bottom:0; width:2px; background:var(--border-color);"></div>
+                {% endif %}
+                <div>
+                    <div class="fw-semibold" style="font-size:0.9rem; color:{% if claim.status == 'Approved' %}#16a34a{% else %}#dc2626{% endif %};">
+                        {{ claim.status }}
+                    </div>
+                    <div style="font-size:0.8rem; color:var(--text-secondary);">
+                        {% if claim.reviewed_at %}{{ claim.reviewed_at.strftime('%d %b %Y at %H:%M') }}{% endif %}
+                        {% if claim.reviewer %} by {{ claim.reviewer.full_name }}{% endif %}
+                    </div>
+                    {% if claim.status == 'Rejected' and claim.rejection_notes %}
+                    <div class="mt-2 p-2" style="background:#fef2f2; border-radius:6px; border-left:3px solid #dc2626; font-size:0.85rem;">
+                        <span class="fw-semibold" style="color:#dc2626;">Rejection Reason:</span>
+                        {{ claim.rejection_notes }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if claim.status == 'Approved' and (claim.payment_status or 'Unpaid') == 'Paid' %}
+            <!-- Reimbursed -->
+            <div style="position:relative; padding-bottom:0;">
+                <div style="position:absolute; left:-32px; top:2px; width:24px; height:24px; border-radius:50%; background:#16a34a; display:flex; align-items:center; justify-content:center;">
+                    <i class="fas fa-wallet" style="color:#fff; font-size:0.6rem;"></i>
+                </div>
+                <div>
+                    <div class="fw-semibold" style="font-size:0.9rem; color:#16a34a;">Reimbursed</div>
+                    <div style="font-size:0.8rem; color:var(--text-secondary);">
+                        {% if claim.paid_date %}{{ claim.paid_date.strftime('%d %b %Y') }}{% endif %}
+                    </div>
+                    {% if claim.payment_reference %}
+                    <div style="font-size:0.85rem; margin-top:4px;">
+                        <span class="fw-semibold">Reference:</span> <code>{{ claim.payment_reference }}</code>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Reimbursement Section (only for Approved + Unpaid) -->
+{% if claim.status == 'Approved' and (claim.payment_status or 'Unpaid') != 'Paid' %}
+<div class="data-card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-money-bill-wave me-2"></i>Mark as Reimbursed</h5>
+        <span class="badge bg-warning text-dark" style="font-size:0.8rem;">
+            Awaiting Reimbursement: ₹{{ "{:,.2f}".format(claim.amount) }}
+        </span>
+    </div>
+    <div class="p-4">
+        <form method="POST" action="{{ url_for('finance.mark_employee_expense_paid', claim_id=claim.id) }}" novalidate id="mark-paid-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label fw-semibold">Payment Reference</label>
+                    <input type="text" name="payment_reference" class="form-control" 
+                           placeholder="TXN-2026-0001, Cheque No., UPI Ref..." maxlength="100">
+                    <div class="form-text">Transaction ID, cheque number, or UPI reference</div>
+                </div>
+            </div>
+            <hr class="my-3">
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success" onclick="return confirm('Mark this expense of ₹{{ '{:,.2f}'.format(claim.amount) }} as reimbursed?');">
+                    <i class="fas fa-check-circle me-1"></i>Mark as Paid
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<!-- Action Buttons (for Pending claims) -->
+{% if claim.status == 'Pending' %}
+<div class="data-card mb-4">
+    <div class="card-header">
+        <h5><i class="fas fa-gavel me-2"></i>Review Actions</h5>
+    </div>
+    <div class="p-4">
+        <div class="d-flex flex-wrap gap-3">
+            <!-- Edit -->
+            <a href="{{ url_for('finance.edit_employee_expense', claim_id=claim.id) }}" class="btn btn-outline-warning">
+                <i class="fas fa-pencil-alt me-1"></i>Edit Claim
+            </a>
+
+            <!-- Approve -->
+            <form method="POST" action="{{ url_for('finance.approve_employee_expense', claim_id=claim.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-success" onclick="return confirm('Approve this expense claim of ₹{{ '{:,.2f}'.format(claim.amount) }}?');">
+                    <i class="fas fa-check me-1"></i>Approve
+                </button>
+            </form>
+
+            <!-- Reject (with modal) -->
+            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
+                <i class="fas fa-times me-1"></i>Reject
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div class="modal fade" id="rejectModal" tabindex="-1" aria-labelledby="rejectModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST" action="{{ url_for('finance.reject_employee_expense', claim_id=claim.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="rejectModalLabel">
+                        <i class="fas fa-times-circle me-2" style="color:#dc2626;"></i>Reject Expense Claim
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size:0.9rem; color:var(--text-secondary);">
+                        You are rejecting the expense claim of <strong>₹{{ "{:,.2f}".format(claim.amount) }}</strong>
+                        by <strong>{{ claim.employee.user.full_name }}</strong>.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Rejection Reason</label>
+                        <textarea name="rejection_notes" class="form-control" rows="3" 
+                                  placeholder="Provide a reason for rejecting this claim..."></textarea>
+                        <div class="form-text">This will be visible to the employee.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-times me-1"></i>Confirm Rejection
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

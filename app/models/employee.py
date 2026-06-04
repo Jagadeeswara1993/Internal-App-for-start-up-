@@ -280,6 +280,11 @@ class EmployeeExpense(db.Model):
     receipt_original = db.Column(db.String(250), default='')
     status = db.Column(db.String(20), default='Pending')        # Pending, Approved, Rejected
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    rejection_notes = db.Column(db.Text, default='')             # Reason for rejection
+    payment_status = db.Column(db.String(20), default='Unpaid')  # Unpaid, Paid
+    paid_date = db.Column(db.Date, nullable=True)                # Date reimbursement was made
+    payment_reference = db.Column(db.String(100), default='')    # Transaction/cheque reference
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     employee = db.relationship('Employee', backref=db.backref('expense_claims', lazy='dynamic'))

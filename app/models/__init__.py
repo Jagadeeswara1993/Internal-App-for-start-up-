@@ -4,4 +4,4 @@ from .employee import Employee, Leave, LeaveBalance, Attendance, AttendanceRegul
 from .pm import Project, ProjectMember, Task, Milestone, Epic
 from .recruitment import JobPosting, Candidate, Interview
 from .performance import PerformanceReview
-from .finance import Expense, Invoice, SalaryRecord, PayrollInput
+from .finance import Expense, Invoice, SalaryRecord, PayrollInput, InvoiceLineItem, InvoicePayment

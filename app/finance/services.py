@@ -6,7 +6,7 @@ from the finance controllers, supporting robust search filtering and pagination.
 
 from datetime import datetime, date
 from app.extensions import db
-from app.models import Expense, Invoice, SalaryRecord, Employee, EmployeeExpense, Notification, PayrollInput
+from app.models import Expense, Invoice, SalaryRecord, Employee, EmployeeExpense, Notification, PayrollInput, InvoicePayment, InvoiceLineItem
 from app.utils.audit import log_audit
 
 
@@ -120,14 +120,31 @@ def reject_expense(expense_id, user_id, ip_address=''):
 
 def get_employee_expenses(filters=None, page=1, per_page=20):
     """Retrieve filtered, paginated employee expense claims."""
-    query = EmployeeExpense.query.join(Employee)
+    from app.models import User
+    query = EmployeeExpense.query.join(Employee).join(User, Employee.user_id == User.id)
     if filters:
         if filters.get('category'):
             query = query.filter(EmployeeExpense.category == filters['category'])
         if filters.get('status'):
             query = query.filter(EmployeeExpense.status == filters['status'])
+        if filters.get('payment_status'):
+            if filters['payment_status'] == 'Unpaid':
+                query = query.filter(db.or_(
+                    EmployeeExpense.payment_status == 'Unpaid',
+                    EmployeeExpense.payment_status.is_(None)
+                ))
+            else:
+                query = query.filter(EmployeeExpense.payment_status == filters['payment_status'])
         if filters.get('employee_id'):
             query = query.filter(EmployeeExpense.employee_id == filters['employee_id'])
+        if filters.get('employee_search'):
+            search_term = f"%{filters['employee_search']}%"
+            query = query.filter(
+                db.or_(
+                    User.full_name.ilike(search_term),
+                    Employee.emp_code.ilike(search_term)
+                )
+            )
         if filters.get('date_from'):
             try:
                 date_from = datetime.strptime(filters['date_from'], '%Y-%m-%d').date()
@@ -148,6 +165,7 @@ def approve_employee_expense(claim_id, user_id, ip_address=''):
     claim = EmployeeExpense.query.get_or_404(claim_id)
     claim.status = 'Approved'
     claim.reviewed_by = user_id
+    claim.reviewed_at = datetime.utcnow()
     
     log_audit(
         user_id=user_id,
@@ -170,31 +188,67 @@ def approve_employee_expense(claim_id, user_id, ip_address=''):
     return claim
 
 
-def reject_employee_expense(claim_id, user_id, ip_address=''):
+def reject_employee_expense(claim_id, user_id, rejection_notes='', ip_address=''):
     """Reject employee expense claim, notify employee, log audit."""
     claim = EmployeeExpense.query.get_or_404(claim_id)
     claim.status = 'Rejected'
     claim.reviewed_by = user_id
+    claim.reviewed_at = datetime.utcnow()
+    claim.rejection_notes = rejection_notes or ''
     
     log_audit(
         user_id=user_id,
         action='REJECT',
         entity_type='EmployeeExpense',
         entity_id=claim.id,
-        details=f"Rejected claim of ₹{claim.amount:.2f} for employee ID {claim.employee_id}",
+        details=f"Rejected claim of ₹{claim.amount:.2f} for employee ID {claim.employee_id}" + (f" — Reason: {rejection_notes}" if rejection_notes else ''),
         ip=ip_address
     )
     
     # Notify the employee
+    reason_msg = f' Reason: {rejection_notes}' if rejection_notes else ''
     notif = Notification(
         user_id=claim.employee.user_id,
         title='Expense Claim Rejected',
-        message=f'Your expense claim of ₹{claim.amount:,.2f} for category "{claim.category}" has been rejected.',
+        message=f'Your expense claim of ₹{claim.amount:,.2f} for category "{claim.category}" has been rejected.{reason_msg}',
         category='warning',
         link='/employee/expenses'
     )
     db.session.add(notif)
     return claim
+
+
+def mark_employee_expense_paid(claim_id, payment_reference, user_id, ip_address=''):
+    """Mark an approved employee expense claim as reimbursed/paid."""
+    claim = EmployeeExpense.query.get_or_404(claim_id)
+    if claim.status != 'Approved':
+        return None, f"Cannot mark as paid — claim status is '{claim.status}'. Only Approved claims can be reimbursed."
+    if claim.payment_status == 'Paid':
+        return None, "This claim has already been marked as paid."
+
+    claim.payment_status = 'Paid'
+    claim.paid_date = date.today()
+    claim.payment_reference = payment_reference or ''
+
+    log_audit(
+        user_id=user_id,
+        action='MARK_PAID',
+        entity_type='EmployeeExpense',
+        entity_id=claim.id,
+        details=f"Marked expense claim ₹{claim.amount:.2f} as reimbursed for employee ID {claim.employee_id}" + (f" (Ref: {payment_reference})" if payment_reference else ''),
+        ip=ip_address
+    )
+
+    # Notify the employee
+    notif = Notification(
+        user_id=claim.employee.user_id,
+        title='Expense Reimbursed',
+        message=f'Your expense claim of ₹{claim.amount:,.2f} ({claim.category}) has been reimbursed.' + (f' Reference: {payment_reference}' if payment_reference else ''),
+        category='success',
+        link='/employee/expenses'
+    )
+    db.session.add(notif)
+    return claim, None
 
 
 def update_employee_expense(claim_id, category, amount, date_val, description, user_id, ip_address=''):
@@ -429,6 +483,71 @@ def update_invoice(invoice_id, invoice_number, client_name, amount, issue_date, 
         ip=ip_address
     )
     return invoice, None
+
+
+def record_payment(invoice_id, amount, payment_date, payment_method, reference_number, notes, user_id, ip_address=''):
+    """Record a payment for an invoice and update its status if fully paid."""
+    invoice = Invoice.query.get_or_404(invoice_id)
+    payment = InvoicePayment(
+        invoice_id=invoice_id,
+        amount=amount,
+        payment_date=payment_date or date.today(),
+        payment_method=payment_method,
+        reference_number=reference_number or '',
+        notes=notes or ''
+    )
+    db.session.add(payment)
+    db.session.flush()
+    
+    # Check if fully paid
+    if invoice.balance_due <= 0.0:
+        invoice.status = 'Paid'
+        
+    log_audit(
+        user_id=user_id,
+        action='RECORD_PAYMENT',
+        entity_type='InvoicePayment',
+        entity_id=payment.id,
+        details=f"Recorded payment of ₹{amount:.2f} via {payment_method} for Invoice {invoice.invoice_number}",
+        ip=ip_address
+    )
+    return payment
+
+
+def delete_invoice(invoice_id, user_id, ip_address=''):
+    """Delete an invoice (only if it is Unpaid and has no payments)."""
+    invoice = Invoice.query.get_or_404(invoice_id)
+    if invoice.status != 'Unpaid':
+        return False, f"Cannot delete invoice {invoice.invoice_number} because its status is '{invoice.status}'. Only Unpaid invoices can be deleted."
+    if len(invoice.payments) > 0:
+        return False, f"Cannot delete invoice {invoice.invoice_number} because it has payments recorded."
+        
+    invoice_number = invoice.invoice_number
+    db.session.delete(invoice)
+    
+    log_audit(
+        user_id=user_id,
+        action='DELETE',
+        entity_type='Invoice',
+        entity_id=invoice_id,
+        details=f"Deleted invoice {invoice_number}",
+        ip=ip_address
+    )
+    return True, None
+
+
+def detect_and_update_overdue_invoices():
+    """Identify unpaid/overdue-candidate invoices that are past their due date and mark them as Overdue."""
+    today = date.today()
+    overdue_invoices = Invoice.query.filter(
+        Invoice.status == 'Unpaid',
+        Invoice.due_date < today
+    ).all()
+    
+    for inv in overdue_invoices:
+        inv.status = 'Overdue'
+        
+    return len(overdue_invoices)
 
 
 # ===========================================================================
